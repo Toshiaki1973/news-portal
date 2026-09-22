@@ -114,6 +114,10 @@ IR_COMPANIES = [
         "label": "コナミグループ", "code": "9766",
         "source": {"type": "konami_newsroom"},
     },
+    {
+        "label": "スクウェア・エニックスHD", "code": "9684",
+        "source": {"type": "sqex_ir"},
+    },
 ]
 IR_ARTICLES_PER_COMPANY = 10
 
@@ -133,6 +137,16 @@ BANDAINAMCO_MONTHS_TO_SCAN = 6  # 直近何ヶ月分のアーカイブページ�
 
 KONAMI_NEWSROOM_URL = "https://www.konami.com/js/common/newsRoom.php?lang=ja&newsType=newsList"
 KONAMI_BASE_URL = "https://www.konami.com"
+
+# ニュース一覧は静的HTMLに全カテゴリ分が出力されており、newsBoxIconの文字列が
+# 「企業」のものがIR/コーポレート関連(決算・人事・配当など)に該当する
+SQEX_IR_URL = "https://www.hd.square-enix.com/jpn/news/"
+SQEX_BASE_URL = "https://www.hd.square-enix.com"
+SQEX_ITEM_RE = re.compile(
+    r'<div class="newsBox">\s*<div class="newsBoxIcon">([^<]+)</div>\s*'
+    r'<div class="newsBoxCont">\s*<p class="newsBoxInfo"><span class="date">([^<]+)</span>\s*'
+    r'<span class="cat">([^<]*)</span>\s*</p>\s*'
+    r'<a class="newsBoxTxt" href="([^"]+)"[^>]*>\s*<span>([^<]+)</span></a>', re.S)
 
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 YOUTUBE_TRENDING_FETCH_COUNT = 30  # 急上昇チャートから取得して通常/ショートに振り分ける件数
@@ -499,6 +513,28 @@ def fetch_konami_ir():
     return articles
 
 
+def fetch_sqex_ir():
+    """ニュース一覧ページは全カテゴリが静的HTMLに出力されており、
+    newsBoxIconが「企業」の項目がIR/コーポレート関連にあたる。"""
+    try:
+        r = get_with_retry(SQEX_IR_URL)
+        r.encoding = "utf-8"
+    except requests.RequestException as e:
+        print(f"  skip スクエニIR: {e}")
+        return []
+
+    articles = []
+    for icon, date, _cat, link, title in SQEX_ITEM_RE.findall(r.text):
+        if icon != "企業":
+            continue
+        if link.startswith("/"):
+            link = SQEX_BASE_URL + link
+        articles.append({"title": f"{title.strip()}（{date.replace('.', '/')}）", "link": link})
+        if len(articles) >= IR_ARTICLES_PER_COMPANY:
+            break
+    return articles
+
+
 def fetch_ir_news(source):
     t = source["type"]
     if t == "capcom_ir":
@@ -507,6 +543,8 @@ def fetch_ir_news(source):
         return fetch_bandainamco_ir()
     if t == "konami_newsroom":
         return fetch_konami_ir()
+    if t == "sqex_ir":
+        return fetch_sqex_ir()
     try:
         r = get_with_retry(source["url"])
         max_items = 100 if t == "rss_filter" else IR_ARTICLES_PER_COMPANY
