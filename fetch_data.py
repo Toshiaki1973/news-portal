@@ -206,11 +206,11 @@ def build_sections():
     return [
         {"id": "news", "label": "📰 一般ニュース", "groups": news},
         {"id": "game", "label": "🎮 ゲームニュース", "groups": game},
+        {"id": "hachima", "label": "🗨️ はちま起稿", "groups": hachima},
         {"id": "movie", "label": "🎬 映画", "groups": [
             {"label": "今週公開", "articles": movies["upcoming"]},
             {"label": "アクセスランキング", "articles": movies["ranking"]},
         ]},
-        {"id": "hachima", "label": "🗨️ はちま起稿", "groups": hachima},
         {"id": "youtube", "label": "▶️ YouTube急上昇（日本）", "groups": [
             {"label": "通常動画", "articles": youtube_regular},
             {"label": "ショート（推定）", "articles": youtube_shorts},
