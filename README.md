@@ -1,6 +1,6 @@
 # news-portal
 
-毎時03分、世界が静かに更新される。
+毎時16分、世界が静かに更新される。
 ニュース、ゲーム、映画、株価——気になるすべてを、ひとつの画面に。
 
 **→ [https://toshiaki1973.github.io/news-portal/](https://toshiaki1973.github.io/news-portal/)**
@@ -23,5 +23,5 @@ PCでは5つのカラムを横に並べて同時に眺め、スマホではタ�
 ## つくり
 
 - Python + `requests` のみ（RSS・スクレイピング・各種APIを集約して1枚のHTMLを生成）
-- GitHub Actions が毎時03分に `fetch_data.py` を実行し、GitHub Pages へ自動デプロイ
+- GitHub Actions が毎時16分に `fetch_data.py` を実行し、GitHub Pages へ自動デプロイ
 - レイアウトはCSSのみで完結。PCは5カラムグリッドで各カラム独立スクロール、900px未満はタブ切り替えに変わる
