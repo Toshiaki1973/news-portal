@@ -9,6 +9,7 @@ PCでは5カラムを横に並べて各カラム独立スクロール、スマ�
 """
 import argparse
 import html
+import json
 import os
 import re
 import sys
@@ -55,7 +56,7 @@ EIGA_RANKING_TOP_N = 10
 
 STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories"
 STEAM_APP_URL = "https://store.steampowered.com/app/{id}/"
-STEAM_ITEMS_PER_GROUP = 8
+STEAM_ITEMS_PER_GROUP = 10
 
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 WEATHER_CITIES = [
@@ -71,6 +72,60 @@ WEATHER_CODE_JA = {
     80: "にわか雨", 81: "にわか雨", 82: "激しいにわか雨",
     95: "雷雨", 96: "雷雨（ひょう）", 99: "雷雨（激しいひょう）",
 }
+
+# 株価: Yahoo Financeのグローバル向けchart API（無料・キー不要）。表示リンクは日本語版Yahoo!ファイナンス。
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{code}.T"
+YAHOO_QUOTE_URL = "https://finance.yahoo.co.jp/quote/{code}.T"
+
+# IR情報: 各社サイトの実装がバラバラなため、会社ごとに取得方法を変えている。
+# - rss_filter: 汎用RSS/ニュースフィードから、リンクに特定文字列を含むものだけをIR情報として抽出
+# - rss_direct: IR専用のRSS/カテゴリフィードをそのまま使う
+# - bandainamco_archive: /ir/配下はbot対策で403になるため、プレスリリース一覧(/releases/)の
+#   月別アーカイブページを新しい月から辿り、data-category="irinfo"の項目だけ拾う
+# - konami_newsroom: IRニュースページ自体はJS描画のSPAで静的取得不可だが、実体を書き出す
+#   newsRoom.php（JSファイルの中にJSON埋め込み）から直接IRカテゴリの項目を抽出する
+IR_COMPANIES = [
+    {
+        "label": "任天堂", "code": "7974",
+        "source": {"type": "rss_filter", "url": "https://www.nintendo.co.jp/news/whatsnew.xml", "must_contain": "/ir/"},
+    },
+    {
+        "label": "カプコン", "code": "9697",
+        # news.xml(全社共通フィード)はIR項目のtitleが「プレスリリース 20XX年3月期」の
+        # 定型文で全件同じになるため使わず、IRニュース一覧ページを直接スクレイピングする
+        "source": {"type": "capcom_ir"},
+    },
+    {
+        "label": "セガサミーHD", "code": "6460",
+        "source": {"type": "rss_direct", "url": "https://www.segasammy.co.jp/ja/release/category/ir/feed/"},
+    },
+    {
+        "label": "バンダイナムコHD", "code": "7832",
+        "source": {"type": "bandainamco_archive"},
+    },
+    {
+        "label": "コナミグループ", "code": "9766",
+        "source": {"type": "konami_newsroom"},
+    },
+]
+IR_ARTICLES_PER_COMPANY = 10
+
+CAPCOM_IR_URL = "https://www.capcom.co.jp/ir/news"
+CAPCOM_IR_ITEM_RE = re.compile(
+    r'<li data-category="[^"]*"><a href="([^"]+)">.*?'
+    r'<div class="date">([^<]+)</div>.*?'
+    r'<div class="lead">(.*?)</div>', re.S)
+
+BANDAINAMCO_ARCHIVE_XML = "https://www.bandainamco.co.jp/releases/archives.xml"
+BANDAINAMCO_MONTH_RE = re.compile(r'<date-group-month[^>]*url="([^"]+)"')
+BANDAINAMCO_ITEM_RE = re.compile(
+    r'<li class="news-list__item" data-category="([^"]+)"[^>]*>.*?'
+    r'<time class="news-list__date" datetime="([^"]+)">.*?'
+    r'<a href="([^"]+)"[^>]*>([^<]+)<', re.S)
+BANDAINAMCO_MONTHS_TO_SCAN = 6  # 直近何ヶ月分のアーカイブページを遡ってIR項目を探すか
+
+KONAMI_NEWSROOM_URL = "https://www.konami.com/js/common/newsRoom.php?lang=ja&newsType=newsList"
+KONAMI_BASE_URL = "https://www.konami.com"
 
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 YOUTUBE_TRENDING_FETCH_COUNT = 30  # 急上昇チャートから取得して通常/ショートに振り分ける件数
@@ -271,6 +326,190 @@ def fetch_steam_highlights():
     return {"specials": specials, "new_releases": new_releases}
 
 
+def fetch_stock_quote(code):
+    try:
+        r = requests.get(YAHOO_CHART_URL.format(code=code), headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        meta = r.json()["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice")
+        prev_close = meta.get("chartPreviousClose")
+        if price is None:
+            return None
+        if prev_close:
+            diff = price - prev_close
+            diff_str = f"（前日比{diff:+,.0f}円）"
+        else:
+            diff_str = ""
+        return {
+            "title": f"📈 現在値 {price:,.0f}円{diff_str}",
+            "link": YAHOO_QUOTE_URL.format(code=code),
+        }
+    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as e:
+        print(f"  skip 株価({code}): {e}")
+        return None
+
+
+def fetch_capcom_ir():
+    """IRニュース一覧ページを直接スクレイピングし、見出し(lead)をそのまま使う。"""
+    try:
+        r = get_with_retry(CAPCOM_IR_URL)
+        r.encoding = "utf-8"
+    except requests.RequestException as e:
+        print(f"  skip カプコンIR: {e}")
+        return []
+
+    articles = []
+    for link, date, lead in CAPCOM_IR_ITEM_RE.findall(r.text):
+        title = re.sub(r"<[^>]+>", " ", lead)
+        title = re.sub(r"\s+", " ", title).strip()
+        date_clean = date.replace("年", "/").replace("月", "/").replace("日", "")
+        articles.append({"title": f"{title}（{date_clean}）", "link": link})
+        if len(articles) >= IR_ARTICLES_PER_COMPANY:
+            break
+    return articles
+
+
+def fetch_bandainamco_ir():
+    """/ir/配下は直接アクセスするとbot対策で弾かれるため、プレスリリース一覧
+    (/releases/)の月別アーカイブを新しい月から遡り、経営情報(irinfo)カテゴリの
+    項目だけを拾う。"""
+    try:
+        r = get_with_retry(BANDAINAMCO_ARCHIVE_XML)
+        r.encoding = "utf-8"  # charsetヘッダが無くrequestsがISO-8859-1と誤検出するため明示指定
+        month_urls = BANDAINAMCO_MONTH_RE.findall(r.text)[:BANDAINAMCO_MONTHS_TO_SCAN]
+    except requests.RequestException as e:
+        print(f"  skip バンダイナムコIR(archives): {e}")
+        return []
+
+    articles = []
+    for month_url in month_urls:
+        if len(articles) >= IR_ARTICLES_PER_COMPANY:
+            break
+        try:
+            r = get_with_retry(month_url)
+            r.encoding = "utf-8"
+        except requests.RequestException as e:
+            print(f"  skip バンダイナムコIR({month_url}): {e}")
+            continue
+        for category, date, link, title in BANDAINAMCO_ITEM_RE.findall(r.text):
+            if category != "irinfo":
+                continue
+            articles.append({"title": f"{title.strip()}（{date}）", "link": link})
+            if len(articles) >= IR_ARTICLES_PER_COMPANY:
+                break
+    return articles
+
+
+def extract_balanced_json(text, start):
+    """textのstart位置から始まるJSONオブジェクトを、波括弧の対応を数えて抜き出す。"""
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+        else:
+            if c == '"':
+                in_str = True
+            elif c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+    return None
+
+
+def fetch_konami_ir():
+    """IRニュースページ自体はJS描画のSPAで静的には取得できないが、ページが
+    document.writeで読み込むnewsRoom.php（実体はJSファイルだがJSONデータを
+    含む）から、IR系カテゴリ(ir-*)の項目を直接抜き出す。"""
+    try:
+        r = get_with_retry(KONAMI_NEWSROOM_URL)
+    except requests.RequestException as e:
+        print(f"  skip コナミIR: {e}")
+        return []
+
+    marker = "newsJson = "
+    idx = r.text.find(marker)
+    if idx == -1:
+        print("  skip コナミIR: newsJsonが見つからない")
+        return []
+    blob = extract_balanced_json(r.text, idx + len(marker))
+    if blob is None:
+        print("  skip コナミIR: JSON抽出失敗")
+        return []
+    try:
+        data = json.loads(blob)
+    except ValueError as e:
+        print(f"  skip コナミIR: JSON解析失敗 {e}")
+        return []
+
+    ir_items = []
+    for _year, items in data.items():
+        for it in items:
+            category = it.get("newsCategory", "").split("/")[0]
+            if category.startswith("ir-"):
+                ir_items.append(it)
+    ir_items.sort(key=lambda x: x.get("newsDate", ""), reverse=True)
+
+    articles = []
+    for it in ir_items[:IR_ARTICLES_PER_COMPANY]:
+        link = it.get("newsLink", "").strip()
+        if link.startswith("/"):
+            link = KONAMI_BASE_URL + link
+        articles.append({"title": it.get("newsTitle", "").strip(), "link": link})
+    return articles
+
+
+def fetch_ir_news(source):
+    t = source["type"]
+    if t == "capcom_ir":
+        return fetch_capcom_ir()
+    if t == "bandainamco_archive":
+        return fetch_bandainamco_ir()
+    if t == "konami_newsroom":
+        return fetch_konami_ir()
+    try:
+        r = get_with_retry(source["url"])
+        max_items = 100 if t == "rss_filter" else IR_ARTICLES_PER_COMPANY
+        articles = parse_feed(r.content, max_items=max_items)
+    except (requests.RequestException, ET.ParseError) as e:
+        print(f"  skip IR({source['url']}): {e}")
+        return []
+    if t == "rss_filter":
+        articles = [a for a in articles if source["must_contain"] in a["link"]]
+        date_re = source.get("date_from_link_re")
+        if date_re:
+            pattern = re.compile(date_re)
+            for a in articles:
+                m = pattern.search(a["link"])
+                if m:
+                    yy, mm, dd = m.groups()
+                    a["title"] = f"{a['title']}（20{yy}/{mm}/{dd}）"
+    return articles[:IR_ARTICLES_PER_COMPANY]
+
+
+def fetch_ir_info():
+    """ゲーム大手5社の株価(Yahoo!ファイナンス)と最新IR情報をまとめる。"""
+    groups = []
+    for company in IR_COMPANIES:
+        quote = fetch_stock_quote(company["code"])
+        ir_articles = fetch_ir_news(company["source"])
+        print(f"  {company['label']}: 株価{'取得' if quote else '失敗'} / IR{len(ir_articles)}件")
+        groups.append({
+            "label": company["label"],
+            "articles": ([quote] if quote else []) + ir_articles,
+        })
+    return groups
+
+
 def build_sections():
     print("天気を取得中...")
     weather = fetch_weather()
@@ -284,6 +523,8 @@ def build_sections():
     movies = fetch_movies()
     print("はちま起稿を取得中...")
     hachima = fetch_rss_group(RSS_FEEDS["hachima"])
+    print("IR情報を取得中...")
+    ir_groups = fetch_ir_info()
     print("YouTube急上昇を取得中...")
     youtube_regular, youtube_shorts = fetch_youtube_trending()
 
@@ -293,12 +534,12 @@ def build_sections():
         {"label": "Steamセール", "articles": steam["specials"]},
         {"label": "Steam新作", "articles": steam["new_releases"]},
         game[1],
-    ]
+    ] + hachima  # はちま起稿はゲームニュース欄の最後に表示
 
     return [
         {"id": "news", "label": "📰 一般ニュース", "groups": news_groups},
         {"id": "game", "label": "🎮 ゲームニュース", "groups": game_groups},
-        {"id": "hachima", "label": "🗨️ はちま起稿", "groups": hachima},
+        {"id": "ir", "label": "💹 IR情報（大手ゲーム会社）", "groups": ir_groups},
         {"id": "movie", "label": "🎬 映画", "groups": [
             {"label": "今週公開", "articles": movies["upcoming"]},
             {"label": "アクセスランキング", "articles": movies["ranking"]},
