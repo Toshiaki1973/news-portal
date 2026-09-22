@@ -31,7 +31,7 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 ## GitHub Pagesでの公開
 
 - `output/`は`.gitignore`対象（Actionsが実行のたびに生成し、`actions/upload-pages-artifact`でそのままデプロイするためリポジトリにはコミットしない）
-- ワークフロー: `.github/workflows/deploy.yml`。毎時03分（toshi指定。news-digestのSlack投稿を止める代わりにこのページで確認する運用に切替）+ `workflow_dispatch`（手動実行）+ mainへのpushをトリガーに、`fetch_data.py`実行→`output/`をPagesにデプロイ
+- ワークフロー: `.github/workflows/deploy.yml`。毎時06分（toshi指定。news-digestのSlack投稿を止める代わりにこのページで確認する運用に切替。当初03分だったが一度もschedule起動が確認できなかったため06分に変更）+ `workflow_dispatch`（手動実行）+ masterへのpushをトリガーに、`fetch_data.py`実行→`output/`をPagesにデプロイ
 - リポジトリSecrets `YOUTUBE_API_KEY`の設定と、Settings > Pages > Source を「GitHub Actions」にする作業が別途必要
 
 ## 既知の制約

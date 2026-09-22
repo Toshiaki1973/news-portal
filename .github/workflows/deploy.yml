@@ -2,7 +2,7 @@ name: Deploy portal to GitHub Pages
 
 on:
   schedule:
-    - cron: "3 * * * *"
+    - cron: "6 * * * *"
   workflow_dispatch: {}
   push:
     branches: [master]
