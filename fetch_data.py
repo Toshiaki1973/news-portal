@@ -53,6 +53,25 @@ EIGA_RANKING_MOVIE_RE = re.compile(
 EIGA_UPCOMING_LIMIT = 10
 EIGA_RANKING_TOP_N = 10
 
+STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories"
+STEAM_APP_URL = "https://store.steampowered.com/app/{id}/"
+STEAM_ITEMS_PER_GROUP = 8
+
+WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_CITIES = [
+    {"label": "東京", "lat": 35.6762, "lon": 139.6503, "link": "https://weather.yahoo.co.jp/weather/jp/13/4410.html"},
+    {"label": "大阪", "lat": 34.6937, "lon": 135.5023, "link": "https://weather.yahoo.co.jp/weather/jp/27/6200.html"},
+]
+WEATHER_CODE_JA = {
+    0: "快晴", 1: "晴れ", 2: "晴れ時々曇り", 3: "曇り",
+    45: "霧", 48: "霧（霜）",
+    51: "弱い霧雨", 53: "霧雨", 55: "強い霧雨",
+    61: "弱い雨", 63: "雨", 65: "強い雨",
+    71: "弱い雪", 73: "雪", 75: "強い雪",
+    80: "にわか雨", 81: "にわか雨", 82: "激しいにわか雨",
+    95: "雷雨", 96: "雷雨（ひょう）", 99: "雷雨（激しいひょう）",
+}
+
 YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 YOUTUBE_TRENDING_FETCH_COUNT = 30  # 急上昇チャートから取得して通常/ショートに振り分ける件数
 YOUTUBE_TRENDING_TOP_N = 10        # 振り分け後、各カテゴリで表示する件数
@@ -191,11 +210,76 @@ def fetch_youtube_trending():
     return regular[:YOUTUBE_TRENDING_TOP_N], shorts[:YOUTUBE_TRENDING_TOP_N]
 
 
+def fetch_weather():
+    """Open-Meteo（無料・APIキー不要）で東京/大阪の今日・明日の天気を取得する。"""
+    articles = []
+    for city in WEATHER_CITIES:
+        params = {
+            "latitude": city["lat"],
+            "longitude": city["lon"],
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min",
+            "timezone": "Asia/Tokyo",
+            "forecast_days": 2,
+        }
+        try:
+            r = requests.get(WEATHER_URL, params=params, timeout=15)
+            r.raise_for_status()
+            daily = r.json()["daily"]
+        except (requests.RequestException, KeyError, ValueError) as e:
+            print(f"  skip 天気({city['label']}): {e}")
+            continue
+
+        day_labels = ["今日", "明日"]
+        for i, label in enumerate(day_labels[:len(daily.get("time", []))]):
+            code = daily["weather_code"][i]
+            high = daily["temperature_2m_max"][i]
+            low = daily["temperature_2m_min"][i]
+            desc = WEATHER_CODE_JA.get(code, f"天気コード{code}")
+            articles.append({
+                "title": f"{city['label']}・{label} {desc} 最高{high:.0f}℃ / 最低{low:.0f}℃",
+                "link": city["link"],
+            })
+    print(f"  天気: {len(articles)}件")
+    return articles
+
+
+def fetch_steam_highlights():
+    """Steam公式の非公開だが広く使われているfeaturedcategories APIでセール/新作を取得する。"""
+    try:
+        r = requests.get(STEAM_FEATURED_URL, params={"cc": "jp", "l": "japanese"}, headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"  skip Steam: {e}")
+        return {"specials": [], "new_releases": []}
+
+    def to_articles(key):
+        items = data.get(key, {}).get("items", [])[:STEAM_ITEMS_PER_GROUP]
+        articles = []
+        for it in items:
+            name = it.get("name", "")
+            discount = it.get("discount_percent", 0)
+            final_price = it.get("final_price")
+            price_str = f"¥{final_price // 100:,}" if isinstance(final_price, int) else ""
+            title = f"{name}（-{discount}% {price_str}）" if discount else f"{name}（{price_str}）"
+            articles.append({"title": title, "link": STEAM_APP_URL.format(id=it.get("id"))})
+        return articles
+
+    specials = to_articles("specials")
+    new_releases = to_articles("new_releases")
+    print(f"  Steamセール: {len(specials)}件 / 新作: {len(new_releases)}件")
+    return {"specials": specials, "new_releases": new_releases}
+
+
 def build_sections():
+    print("天気を取得中...")
+    weather = fetch_weather()
     print("一般ニュースを取得中...")
     news = fetch_rss_group(RSS_FEEDS["news"])
     print("ゲームニュースを取得中...")
     game = fetch_rss_group(RSS_FEEDS["game"])
+    print("Steam情報を取得中...")
+    steam = fetch_steam_highlights()
     print("映画情報を取得中...")
     movies = fetch_movies()
     print("はちま起稿を取得中...")
@@ -203,9 +287,17 @@ def build_sections():
     print("YouTube急上昇を取得中...")
     youtube_regular, youtube_shorts = fetch_youtube_trending()
 
+    news_groups = [{"label": "今日・明日の天気", "articles": weather}] + news
+    game_groups = [
+        game[0],
+        {"label": "Steamセール", "articles": steam["specials"]},
+        {"label": "Steam新作", "articles": steam["new_releases"]},
+        game[1],
+    ]
+
     return [
-        {"id": "news", "label": "📰 一般ニュース", "groups": news},
-        {"id": "game", "label": "🎮 ゲームニュース", "groups": game},
+        {"id": "news", "label": "📰 一般ニュース", "groups": news_groups},
+        {"id": "game", "label": "🎮 ゲームニュース", "groups": game_groups},
         {"id": "hachima", "label": "🗨️ はちま起稿", "groups": hachima},
         {"id": "movie", "label": "🎬 映画", "groups": [
             {"label": "今週公開", "articles": movies["upcoming"]},
