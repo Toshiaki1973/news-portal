@@ -5,10 +5,12 @@
 
 **→ [https://toshiaki1973.github.io/news-portal/](https://toshiaki1973.github.io/news-portal/)**
 
+![news-portalのスクリーンショット](screenshot.png)
+
 ## これは何か
 
 タブを増やさず、スクロールするだけで一日の気になることが把握できる、個人用の定点観測ページ。
-PCでは6つのカラムを横に並べて同時に眺め、スマホではタブで切り替える。裏側では GitHub Actions が1時間ごとに黙々と最新情報を拾い集め、GitHub Pages に静かに置いていく。
+PCでは5つのカラムを横に並べて同時に眺め、スマホではタブで切り替える。裏側では GitHub Actions が1時間ごとに黙々と最新情報を拾い集め、GitHub Pages に静かに置いていく。
 
 ## 見えているもの
 
