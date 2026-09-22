@@ -58,6 +58,13 @@ STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories"
 STEAM_APP_URL = "https://store.steampowered.com/app/{id}/"
 STEAM_ITEMS_PER_GROUP = 10
 
+# 東海道新幹線運行状況: 公式サイト(traininfo.jr-central.co.jp)が内部で読みに行っている
+# JSONを直接取得する。表示用メッセージのコード→文言変換テーブルまでは追いきれないため、
+# 「情報あり件数」「影響を受けている列車数」から簡易な状態表示に留める。
+SHINKANSEN_STATUS_URL = "https://traininfo.jr-central.co.jp/shinkansen/var/train_info/service_status.json"
+SHINKANSEN_SUSPENSION_URL = "https://traininfo.jr-central.co.jp/shinkansen/var/train_info/suspension_info.json"
+SHINKANSEN_INFO_LINK = "https://traininfo.jr-central.co.jp/shinkansen/sp/ja/index.html"
+
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 WEATHER_CITIES = [
     {"label": "東京", "lat": 35.6762, "lon": 139.6503, "link": "https://weather.yahoo.co.jp/weather/jp/13/4410.html"},
@@ -263,6 +270,30 @@ def fetch_youtube_trending():
     shorts.sort(key=lambda v: v["views"], reverse=True)
     print(f"  YouTube急上昇: 通常{len(regular)}件 / ショート{len(shorts)}件")
     return regular[:YOUTUBE_TRENDING_TOP_N], shorts[:YOUTUBE_TRENDING_TOP_N]
+
+
+def fetch_shinkansen_status():
+    """東海道新幹線の運行状況(JR東海公式サイトが内部で読む生JSON)を取得する。"""
+    try:
+        status_data = requests.get(SHINKANSEN_STATUS_URL, headers=HEADERS, timeout=15).json()
+        suspension_data = requests.get(SHINKANSEN_SUSPENSION_URL, headers=HEADERS, timeout=15).json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"  skip 新幹線運行状況: {e}")
+        return []
+
+    status_items = status_data.get("serviceStatusInfo", {}).get("data", [])
+    bounds = suspension_data.get("suspensionInfo", {}).get("bounds", {})
+    affected_trains = sum(len(v) for v in bounds.values())
+
+    if status_items:
+        status_text = f"⚠️ 運行情報あり（{len(status_items)}件）"
+    elif affected_trains:
+        status_text = f"🔶 一部列車に遅延・部分運休の影響あり（{affected_trains}本）"
+    else:
+        status_text = "🟢 平常運転"
+
+    print(f"  東海道新幹線: {status_text}")
+    return [{"title": f"東海道新幹線 {status_text}（詳細はJR東海公式サイトで確認）", "link": SHINKANSEN_INFO_LINK}]
 
 
 def fetch_weather():
@@ -511,6 +542,8 @@ def fetch_ir_info():
 
 
 def build_sections():
+    print("東海道新幹線運行状況を取得中...")
+    shinkansen = fetch_shinkansen_status()
     print("天気を取得中...")
     weather = fetch_weather()
     print("一般ニュースを取得中...")
@@ -528,7 +561,10 @@ def build_sections():
     print("YouTube急上昇を取得中...")
     youtube_regular, youtube_shorts = fetch_youtube_trending()
 
-    news_groups = [{"label": "今日・明日の天気", "articles": weather}] + news
+    news_groups = [
+        {"label": "東海道新幹線 運行状況", "articles": shinkansen},
+        {"label": "今日・明日の天気", "articles": weather},
+    ] + news
     game_groups = [
         game[0],
         {"label": "Steamセール", "articles": steam["specials"]},
