@@ -4,7 +4,6 @@
 ニュース、ゲーム、映画、株価——気になるすべてを、ひとつの画面に。
 
 **→ [https://toshiaki1973.github.io/news-portal/](https://toshiaki1973.github.io/news-portal/)**
-Repo: [https://github.com/Toshiaki1973/news-portal](https://github.com/Toshiaki1973/news-portal)
 
 ## これは何か
 
