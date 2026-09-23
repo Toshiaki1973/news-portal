@@ -28,6 +28,7 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 - YouTube: 公式トレンドチャート（`chart=mostPopular`）を取得し、動画時間3分1秒以下を「ショート」とみなして通常動画と振り分け（program/youtube-rankingと同じ基準）
 - イベント: ウォーカープラス（walkerplus.com）の都道府県別イベント一覧ページ（公式RSS/APIが無いためHTMLスクレイピング）。東京都・大阪府それぞれ開催日が近い順で上位10件
   + SPICE（spice.eplus.jp、イープラス運営）の音楽・イベント・スポーツRSS（公式配信、`spice-api.eplus.jp/rss/articles/{1,5,7}/latest.xml`）
+  + J-WAVE TOKIO HOT 100（公式RSS/APIが無いためHTMLスクレイピング、ページはEUC-JP）上位10件。公式の「サブスクで聴く」ボタンはclickfuse経由でApple Music固定リダイレクトのため、代わりに曲名+アーティスト名でSpotify検索結果へのリンクを自前で組み立てている
 
 ## デザイン
 
@@ -48,4 +49,5 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 - ウォーカープラスも公式APIではなくHTML構造依存のスクレイピングのため、サイト側の構造変更でイベント欄が壊れる可能性がある
 - GameMakersイベントカレンダーのAPIキーはサイト側の公開JSから抜き出したもので、非公式利用。キー失効やsummaryの【ジャンル】タグ表記変更で欄が壊れる可能性がある。ローカル実行時は`GAMEMAKERS_CALENDAR_API_KEY`を環境変数に設定しないとこの欄だけ空になる
 - プロ野球・J1順位表もYahoo!スポーツのHTML構造依存のスクレイピングのため、サイト側の構造変更で壊れる可能性がある
+- J-WAVE TOKIO HOT 100もHTML構造依存のスクレイピングのため壊れる可能性がある。またSpotifyリンクは検索結果への遷移であり、公式が紐付けた正確な楽曲ページへの直リンクではない（曲名・アーティスト名の表記揺れで違う曲がヒットする可能性がある）
 - `get_with_retry()`は接続タイムアウトの場合、初回に限り1回だけリトライする（GitHub Actions環境からGameMakers RSSへの接続が一時的にタイムアウトした事例への対応）。2回目もタイムアウトした場合や429/5xx以外のエラーはリトライせずそのままスキップ扱いになる

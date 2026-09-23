@@ -208,6 +208,17 @@ EVENT_ITEM_RE = re.compile(
     r'<p class="m-mainlist-item-event__period">\s*(?:<span[^>]*>[^<]*</span>\s*)?([^<]+?)\s*</p>', re.S)
 EVENT_ITEMS_PER_AREA = 10
 
+# J-WAVE TOKIO HOT 100: 公式RSS/APIが無いためHTMLスクレイピング（ページはEUC-JP）。
+# 「サブスクで聴く」ボタンはclickfuse経由でApple Music固定にリダイレクトされる仕様なので、
+# 代わりに曲名+アーティスト名でSpotifyの検索結果に飛ぶリンクを自前で組み立てる。
+JWAVE_CHART_URL = "https://www.j-wave.co.jp/original/tokiohot100/chart/main.htm"
+JWAVE_ITEM_RE = re.compile(
+    r'<div class="song_rank">(\d+)</div>.*?'
+    r'<div class="song_title">(?:<a[^>]*>)?([^<]+?)(?:</a>)?</div>\s*'
+    r'<div class="song_artist">([^<]+)</div>', re.S)
+JWAVE_TOP_N = 10
+SPOTIFY_SEARCH_URL = "https://open.spotify.com/search/{query}"
+
 # GameMakers（gamemakers.jp/event/）のイベントカレンダーはGoogleカレンダーで管理されており、
 # サイトのフロントエンドJS(app.bundle.js)に埋め込まれた公開APIキーでGoogle Calendar APIから
 # 直接取得できる。summary末尾の【ジャンル】タグ（例:【カンファレンス】）で種別を絞り込む。
@@ -406,6 +417,25 @@ def fetch_events():
         print(f"  イベント({area['label']}): {len(articles)}件")
         groups.append({"label": area["label"], "articles": articles})
     return groups
+
+
+def fetch_jwave_chart():
+    """J-WAVE TOKIO HOT 100を取得し、曲名+アーティスト名でSpotify検索リンクを組み立てる。"""
+    try:
+        r = get_with_retry(JWAVE_CHART_URL)
+        r.encoding = "euc-jp"
+    except requests.RequestException as e:
+        print(f"  skip J-WAVE TOKIO HOT 100: {e}")
+        return []
+
+    articles = []
+    for rank, title, artist in JWAVE_ITEM_RE.findall(r.text)[:JWAVE_TOP_N]:
+        title = html.unescape(title.strip())
+        artist = html.unescape(artist.strip())
+        link = SPOTIFY_SEARCH_URL.format(query=quote(f"{title} {artist}"))
+        articles.append({"title": f"{rank}位 {title} / {artist}", "link": link})
+    print(f"  J-WAVE TOKIO HOT 100: {len(articles)}件")
+    return articles
 
 
 def fetch_gamemakers_events():
@@ -808,6 +838,9 @@ def build_sections():
     youtube_regular, youtube_shorts = fetch_youtube_trending()
     print("イベント情報を取得中...")
     event_groups = fetch_events() + fetch_rss_group(RSS_FEEDS["spice"])
+    print("J-WAVE TOKIO HOT 100を取得中...")
+    jwave_chart = fetch_jwave_chart()
+    event_groups.append({"label": "J-WAVE TOKIO HOT 100", "articles": jwave_chart})
 
     news_groups = [
         {"label": "東海道新幹線 運行状況", "articles": shinkansen},
