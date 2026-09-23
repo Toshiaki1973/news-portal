@@ -1,0 +1,19 @@
+name: Keepalive
+
+# 60日間コミットが無いとスケジュール実行が自動停止されるため、月1回deploy.ymlを有効化し直す
+on:
+  schedule:
+    - cron: "22 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-enable deploy workflow
+        run: gh api -X PUT repos/${{ github.repository }}/actions/workflows/deploy.yml/enable
+        env:
+          GH_TOKEN: ${{ github.token }}
