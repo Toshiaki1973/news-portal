@@ -2,7 +2,8 @@
 
 1時間ごとの実行を想定。RSS/APIから各カテゴリの最新トピックを取得し、
 そのままブラウザで開ける単一HTMLファイル(output/index.html)を生成する。
-PCでは5カラムを横に並べて各カラム独立スクロール、スマホはタブ切り替え。
+PCでは5カラム（一般ニュース/ゲームニュース/IR情報/映画・YouTube/イベント）を
+横に並べて各カラム独立スクロール、スマホはタブ切り替え。
 
 必要な環境変数:
 - YOUTUBE_API_KEY（YouTube急上昇取得用。無ければYouTube欄は空になる）
@@ -16,6 +17,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
 import requests
 
@@ -30,14 +32,24 @@ RSS_FEEDS = {
     "news": [
         {"label": "NHKニュース", "url": "https://www.nhk.or.jp/rss/news/cat0.xml"},
         {"label": "Yahoo!ニューストピックス", "url": "https://news.yahoo.co.jp/rss/topics/top-picks.xml"},
+        {"label": "CNN.co.jp（海外）", "url": "https://feeds.cnn.co.jp/rss/cnn/cnn.rdf"},
         {"label": "AI Watch", "url": "https://ai.watch.impress.co.jp/data/rss/1.0/aiw/feed.rdf"},
     ],
     "game": [
+        {"label": "GameMakers", "url": "https://gamemakers.jp/category/news/feed/"},
         {"label": "4Gamer（一般）", "url": "https://www.4gamer.net/rss/index.xml"},
         {"label": "AUTOMATON（インディー中心）", "url": "https://automaton-media.com/feed/"},
     ],
     "hachima": [
         {"label": "はちま起稿", "url": "http://blog.esuteru.com/index.rdf"},
+    ],
+    "sports_news": [
+        {"label": "Yahoo!スポーツ", "url": "https://news.yahoo.co.jp/rss/categories/sports.xml"},
+    ],
+    "spice": [
+        {"label": "SPICE 音楽", "url": "http://spice-api.eplus.jp/rss/articles/1/latest.xml?encoded=1"},
+        {"label": "SPICE イベント", "url": "http://spice-api.eplus.jp/rss/articles/5/latest.xml?encoded=1"},
+        {"label": "SPICE スポーツ", "url": "http://spice-api.eplus.jp/rss/articles/7/latest.xml?encoded=1"},
     ],
 }
 
@@ -53,6 +65,36 @@ EIGA_RANKING_MOVIE_RE = re.compile(
     r'.*?<h2 class="title">\s*<a href="/movie/\d+/">([^<]+)</a>', re.S)
 EIGA_UPCOMING_LIMIT = 10
 EIGA_RANKING_TOP_N = 10
+
+# 配信ランキング: 上記の今週公開/アクセスランキングとは違い、ページ内にschema.orgの
+# JSON-LD(ItemList)が埋め込まれているため正規表現でなくそちらをパースする。
+EIGA_STREAMING_SERVICES = [
+    {"label": "Amazon Prime Video", "url": "https://eiga.com/streaming/amazon/"},
+    {"label": "Netflix", "url": "https://eiga.com/streaming/netflix/"},
+    {"label": "U-NEXT", "url": "https://eiga.com/streaming/unext/"},
+]
+EIGA_STREAMING_JSONLD_RE = re.compile(r'<script type="application/ld\+json">(\[.*?\])</script>', re.S)
+EIGA_STREAMING_TOP_N = 10
+
+# プロ野球順位表・J1順位表: どちらも公式RSS/APIが無いためYahoo!スポーツをHTMLスクレイピング。
+NPB_STANDINGS_URL = "https://baseball.yahoo.co.jp/npb/standings/"
+NPB_STANDINGS_ROW_RE = re.compile(
+    r'<td class="bb-rankTable__data bb-rankTable__data--rank">([^<]+)</td>\s*'
+    r'<td class="bb-rankTable__data bb-rankTable__data--team">\s*'
+    r'<a href="[^"]*" class="[^"]*">([^<]+)</a>.*?'
+    r'<td class="bb-rankTable__data">\d+</td>\s*'
+    r'<td class="bb-rankTable__data">(\d+)</td>\s*'
+    r'<td class="bb-rankTable__data">(\d+)</td>\s*'
+    r'<td class="bb-rankTable__data">(\d+)</td>\s*'
+    r'<td class="bb-rankTable__data">([\d.]+)</td>', re.S)
+NPB_TEAMS_PER_LEAGUE = 6  # ページ先頭からセ・リーグ6球団→パ・リーグ6球団の順で並ぶ
+
+J1_STANDINGS_URL = "https://soccer.yahoo.co.jp/jleague/category/j1/standings"
+J1_STANDINGS_ROW_RE = re.compile(
+    r'<span class="sc-tableValue__rank">([^<]+)</span>.*?'
+    r'<a class="sc-tableValue__team"[^>]*>\s*<span[^>]*></span>\s*</a>\s*'
+    r'<a class="sc-tableValue__team"[^>]*>([^<]+)</a>\s*'
+    r'</td>\s*<td class="sc-tableValue__data">(\d+)</td>', re.S)
 
 STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories"
 STEAM_APP_URL = "https://store.steampowered.com/app/{id}/"
@@ -154,6 +196,29 @@ YOUTUBE_TRENDING_TOP_N = 10        # 振り分け後、各カテゴリで表示�
 SHORTS_MAX_SECONDS = 181           # これ以下の長さは「ショート」とみなす近似値（3分1秒。program/youtube-rankingと同じ基準）
 DURATION_RE = re.compile(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?")
 
+# イベント情報: ウォーカープラスには公式RSS/APIが無いためHTMLスクレイピング。
+# 都道府県別のイベント一覧ページ（開催日が近い順）を上位N件だけ取得する。
+WALKERPLUS_BASE_URL = "https://www.walkerplus.com"
+EVENT_AREAS = [
+    {"label": "東京都", "path": "/event_list/ar0313/"},
+    {"label": "大阪府", "path": "/event_list/ar0727/"},
+]
+EVENT_ITEM_RE = re.compile(
+    r'<a href="(/event/[^"]+)">\s*<span class="m-mainlist-item__ttl">([^<]+)</span>\s*</a>\s*'
+    r'<p class="m-mainlist-item-event__period">\s*(?:<span[^>]*>[^<]*</span>\s*)?([^<]+?)\s*</p>', re.S)
+EVENT_ITEMS_PER_AREA = 10
+
+# GameMakers（gamemakers.jp/event/）のイベントカレンダーはGoogleカレンダーで管理されており、
+# サイトのフロントエンドJS(app.bundle.js)に埋め込まれた公開APIキーでGoogle Calendar APIから
+# 直接取得できる。summary末尾の【ジャンル】タグ（例:【カンファレンス】）で種別を絞り込む。
+# APIキー自体はgamemakers.jp側の公開JSに埋め込まれたものだが、リポジトリに平文で
+# 置かないよう環境変数(GAMEMAKERS_CALENDAR_API_KEY)経由で渡す。
+GAMEMAKERS_CALENDAR_ID = "n7a7nl4hv6k6b8gdjbjvakj5m4@group.calendar.google.com"
+GAMEMAKERS_EVENTS_URL = f"https://www.googleapis.com/calendar/v3/calendars/{quote(GAMEMAKERS_CALENDAR_ID, safe='')}/events"
+GAMEMAKERS_EVENT_DAYS = 31  # 今日から何日分を取得するか
+GAMEMAKERS_EVENT_GENRES = ("カンファレンス", "展示会")  # toshi指定。他に勉強会・コンテストもある
+GAMEMAKERS_EVENT_GENRE_RE = re.compile(r"【([^】]+)】\s*$")
+
 
 def parse_duration_seconds(iso_duration):
     m = DURATION_RE.match(iso_duration or "")
@@ -248,6 +313,38 @@ def fetch_movies():
     return {"upcoming": upcoming, "ranking": ranking}
 
 
+def fetch_streaming_rankings():
+    """Amazon Prime Video/Netflix/U-NEXTの動画配信ランキングを、各ページに埋め込まれた
+    schema.orgのJSON-LD(ItemList)から取得する。"""
+    groups = []
+    for service in EIGA_STREAMING_SERVICES:
+        try:
+            html_text = get_with_retry(service["url"]).text
+        except requests.RequestException as e:
+            print(f"  skip 配信ランキング({service['label']}): {e}")
+            groups.append({"label": service["label"], "articles": []})
+            continue
+
+        articles = []
+        m = EIGA_STREAMING_JSONLD_RE.search(html_text)
+        if m:
+            try:
+                data = json.loads(m.group(1))
+            except ValueError as e:
+                print(f"  skip 配信ランキング({service['label']}): JSON解析失敗 {e}")
+                data = []
+            itemlist = next((d for d in data if d.get("@type") == "ItemList"), None)
+            if itemlist:
+                for item in itemlist.get("itemListElement", [])[:EIGA_STREAMING_TOP_N]:
+                    articles.append({
+                        "title": f"{item['position']}位 {item['name']}",
+                        "link": item["url"],
+                    })
+        print(f"  配信ランキング({service['label']}): {len(articles)}件")
+        groups.append({"label": service["label"], "articles": articles})
+    return groups
+
+
 def fetch_youtube_trending():
     """YouTube公式トレンドチャートを取得し、動画時間で通常動画/ショートに振り分ける。"""
     api_key = os.environ.get("YOUTUBE_API_KEY")
@@ -284,6 +381,101 @@ def fetch_youtube_trending():
     shorts.sort(key=lambda v: v["views"], reverse=True)
     print(f"  YouTube急上昇: 通常{len(regular)}件 / ショート{len(shorts)}件")
     return regular[:YOUTUBE_TRENDING_TOP_N], shorts[:YOUTUBE_TRENDING_TOP_N]
+
+
+def fetch_events():
+    """ウォーカープラスの都道府県別イベント一覧（開催日が近い順）から上位N件を取得する。"""
+    groups = []
+    for area in EVENT_AREAS:
+        try:
+            html_text = get_with_retry(WALKERPLUS_BASE_URL + area["path"]).text
+        except requests.RequestException as e:
+            print(f"  skip イベント({area['label']}): {e}")
+            groups.append({"label": area["label"], "articles": []})
+            continue
+        articles = [
+            {"title": f"{html.unescape(title)}（{period.strip()}）", "link": WALKERPLUS_BASE_URL + link}
+            for link, title, period in EVENT_ITEM_RE.findall(html_text)[:EVENT_ITEMS_PER_AREA]
+        ]
+        print(f"  イベント({area['label']}): {len(articles)}件")
+        groups.append({"label": area["label"], "articles": articles})
+    return groups
+
+
+def fetch_gamemakers_events():
+    """GameMakersイベントカレンダーから今日〜GAMEMAKERS_EVENT_DAYS日後までの、
+    カンファレンス・展示会だけを抽出する。"""
+    api_key = os.environ.get("GAMEMAKERS_CALENDAR_API_KEY")
+    if not api_key:
+        print("  GAMEMAKERS_CALENDAR_API_KEY未設定のためスキップ")
+        return []
+    now = datetime.now(JST)
+    params = {
+        "key": api_key,
+        "timeMin": now.strftime("%Y-%m-%dT00:00:00+09:00"),
+        "timeMax": (now + timedelta(days=GAMEMAKERS_EVENT_DAYS)).strftime("%Y-%m-%dT00:00:00+09:00"),
+        "singleEvents": "true",
+        "orderBy": "startTime",
+        "maxResults": 250,
+    }
+    try:
+        r = requests.get(GAMEMAKERS_EVENTS_URL, params=params, timeout=20)
+        r.raise_for_status()
+        items = r.json().get("items", [])
+    except (requests.RequestException, ValueError) as e:
+        print(f"  skip GameMakersイベント: {e}")
+        return []
+
+    articles = []
+    for it in items:
+        summary = it.get("summary", "")
+        m = GAMEMAKERS_EVENT_GENRE_RE.search(summary)
+        if not m or m.group(1) not in GAMEMAKERS_EVENT_GENRES:
+            continue
+        start = it.get("start", {})
+        date_str = start.get("date") or (start.get("dateTime") or "")[:10]
+        title = f"{summary}（{date_str}）" if date_str else summary
+        articles.append({"title": title, "link": it.get("htmlLink", "")})
+    print(f"  GameMakersイベント: {len(articles)}件")
+    return articles
+
+
+def fetch_npb_standings():
+    """プロ野球(セ・パ)の順位表をYahoo!スポーツから取得する。優勝が決まった球団は
+    順位欄が「優勝」という文字列になるため、その場合は1位として扱う。"""
+    try:
+        html_text = get_with_retry(NPB_STANDINGS_URL).text
+    except requests.RequestException as e:
+        print(f"  skip プロ野球順位表: {e}")
+        return {"central": [], "pacific": []}
+
+    def to_article(rank_text, team, win, lose, draw, pct):
+        rank = "1" if rank_text == "優勝" else rank_text
+        return {
+            "title": f"{rank}位 {team}（{win}勝{lose}敗{draw}分, 勝率{pct}）",
+            "link": NPB_STANDINGS_URL,
+        }
+
+    rows = NPB_STANDINGS_ROW_RE.findall(html_text)
+    central = [to_article(*r) for r in rows[:NPB_TEAMS_PER_LEAGUE]]
+    pacific = [to_article(*r) for r in rows[NPB_TEAMS_PER_LEAGUE:NPB_TEAMS_PER_LEAGUE * 2]]
+    print(f"  プロ野球順位表: セ・リーグ{len(central)}件 / パ・リーグ{len(pacific)}件")
+    return {"central": central, "pacific": pacific}
+
+
+def fetch_j1_standings():
+    """J1リーグの順位表をYahoo!スポーツから取得する。"""
+    try:
+        html_text = get_with_retry(J1_STANDINGS_URL).text
+    except requests.RequestException as e:
+        print(f"  skip J1順位表: {e}")
+        return []
+    articles = [
+        {"title": f"{rank}位 {team}（勝点{points}）", "link": J1_STANDINGS_URL}
+        for rank, team, points in J1_STANDINGS_ROW_RE.findall(html_text)
+    ]
+    print(f"  J1順位表: {len(articles)}件")
+    return articles
 
 
 def fetch_shinkansen_status():
@@ -586,42 +778,63 @@ def build_sections():
     weather = fetch_weather()
     print("一般ニュースを取得中...")
     news = fetch_rss_group(RSS_FEEDS["news"])
+    print("プロ野球順位表を取得中...")
+    npb = fetch_npb_standings()
+    print("J1順位表を取得中...")
+    j1 = fetch_j1_standings()
+    print("スポーツニュースを取得中...")
+    sports_news = fetch_rss_group(RSS_FEEDS["sports_news"])
     print("ゲームニュースを取得中...")
     game = fetch_rss_group(RSS_FEEDS["game"])
+    print("GameMakersイベントカレンダーを取得中...")
+    gamemakers_events = fetch_gamemakers_events()
     print("Steam情報を取得中...")
     steam = fetch_steam_highlights()
     print("映画情報を取得中...")
     movies = fetch_movies()
+    print("動画配信ランキングを取得中...")
+    streaming_groups = fetch_streaming_rankings()
     print("はちま起稿を取得中...")
     hachima = fetch_rss_group(RSS_FEEDS["hachima"])
     print("IR情報を取得中...")
     ir_groups = fetch_ir_info()
     print("YouTube急上昇を取得中...")
     youtube_regular, youtube_shorts = fetch_youtube_trending()
+    print("イベント情報を取得中...")
+    event_groups = fetch_events() + fetch_rss_group(RSS_FEEDS["spice"])
 
     news_groups = [
         {"label": "東海道新幹線 運行状況", "articles": shinkansen},
         {"label": "今日・明日の天気", "articles": weather},
-    ] + news
+        news[0],  # NHKニュース
+        news[1],  # Yahoo!ニューストピックス
+        {"label": "プロ野球順位表：セ・リーグ", "articles": npb["central"]},
+        {"label": "プロ野球順位表：パ・リーグ", "articles": npb["pacific"]},
+        {"label": "J1順位表", "articles": j1},
+    ] + sports_news + news[2:]  # news[2:] = CNN.co.jp（海外）、AI Watch
     game_groups = [
-        game[0],
+        game[0],  # GameMakers
+        {"label": "GameMakers イベントカレンダー（カンファレンス・展示会）", "articles": gamemakers_events},
+        game[1],  # 4Gamer
         {"label": "Steamセール", "articles": steam["specials"]},
         {"label": "Steam新作", "articles": steam["new_releases"]},
-        game[1],
+        game[2],  # AUTOMATON
     ] + hachima  # はちま起稿はゲームニュース欄の最後に表示
 
     return [
         {"id": "news", "label": "📰 一般ニュース", "groups": news_groups},
         {"id": "game", "label": "🎮 ゲームニュース", "groups": game_groups},
         {"id": "ir", "label": "💹 IR情報（大手ゲーム会社）", "groups": ir_groups},
-        {"id": "movie", "label": "🎬 映画", "groups": [
-            {"label": "今週公開", "articles": movies["upcoming"]},
-            {"label": "アクセスランキング", "articles": movies["ranking"]},
+        {"id": "movie-youtube", "label": "🎬 映画・YouTube", "groups": [
+            {"label": "映画：今週公開", "articles": movies["upcoming"]},
+            {"label": "映画：アクセスランキング", "articles": movies["ranking"]},
+        ] + [
+            {"label": f"配信ランキング：{g['label']}", "articles": g["articles"]} for g in streaming_groups
+        ] + [
+            {"label": "YouTube急上昇：通常動画", "articles": youtube_regular},
+            {"label": "YouTube急上昇：ショート（推定）", "articles": youtube_shorts},
         ]},
-        {"id": "youtube", "label": "▶️ YouTube急上昇（日本）", "groups": [
-            {"label": "通常動画", "articles": youtube_regular},
-            {"label": "ショート（推定）", "articles": youtube_shorts},
-        ]},
+        {"id": "event", "label": "🎪 イベント（東京・大阪）", "groups": event_groups},
     ]
 
 

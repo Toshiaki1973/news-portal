@@ -31,6 +31,7 @@ jobs:
       - run: python fetch_data.py
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          GAMEMAKERS_CALENDAR_API_KEY: ${{ secrets.GAMEMAKERS_CALENDAR_API_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: output
