@@ -232,7 +232,13 @@ OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "output", "index.html")
 
 def get_with_retry(url, max_retries=3):
     for attempt in range(max_retries):
-        r = requests.get(url, headers=HEADERS, timeout=20)
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=20)
+        except requests.exceptions.Timeout:
+            if attempt == 0:
+                print("  タイムアウトのため1回だけリトライ")
+                continue
+            raise
         if r.status_code == 429 or r.status_code >= 500:
             wait = (2 ** attempt) * 3
             print(f"  {r.status_code}のため{wait}秒待機してリトライ")
@@ -808,10 +814,11 @@ def build_sections():
         {"label": "今日・明日の天気", "articles": weather},
         news[0],  # NHKニュース
         news[1],  # Yahoo!ニューストピックス
+    ] + news[2:] + [  # news[2:] = CNN.co.jp（海外）、AI Watch
         {"label": "プロ野球順位表：セ・リーグ", "articles": npb["central"]},
         {"label": "プロ野球順位表：パ・リーグ", "articles": npb["pacific"]},
         {"label": "J1順位表", "articles": j1},
-    ] + sports_news + news[2:]  # news[2:] = CNN.co.jp（海外）、AI Watch
+    ] + sports_news  # スポーツ関連は末尾
     game_groups = [
         game[0],  # GameMakers
         {"label": "GameMakers イベントカレンダー（カンファレンス・展示会）", "articles": gamemakers_events},
