@@ -19,6 +19,7 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 
 - 一般ニュース: NHKニュース、Yahoo!ニューストピックス、CNN.co.jp（海外ニュース）、AI Watch（RSS）
   + プロ野球順位表（セ・パ）、J1順位表: どちらも公式RSS/APIが無いためYahoo!スポーツ（baseball.yahoo.co.jp / soccer.yahoo.co.jp）をHTMLスクレイピング。Yahoo!ニューストピックスの直下に配置
+  + Mリーグ（麻雀）順位表: m-league.jpのトップページに埋め込まれた順位表をHTMLスクレイピング。J1順位表の直下に配置
   + スポーツニュース: Yahoo!ニュース スポーツカテゴリ（RSS）。順位表の下に配置
 - ゲームニュース: GameMakers（開発者向け）、4Gamer（一般）、AUTOMATON（インディー中心）（RSS）
   + GameMakersイベントカレンダー（gamemakers.jp/event/、カンファレンス・展示会のみ）: Google Calendar APIから直接取得（APIキーは`GAMEMAKERS_CALENDAR_API_KEY`環境変数）。今日から31日分、summary末尾の【ジャンル】タグで絞り込み
@@ -35,6 +36,7 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 - 背景は薄いピンク、リンク項目の間に薄い罫線（toshi指定）
 - PC（900px以上）: `.portal`をCSS Gridで5カラム、各`.column`が`overflow-y:auto`で独立スクロール
 - スマホ（900px未満）: 上部タブバーでカラムを切り替え表示（JSで`.active`クラス付け替え）
+- スライドショーモード: ヘッダーの「▶ スライドショー」ボタンで全画面表示に切り替え、全カラム・全グループの見出しを1件ずつ自動送りする（画面タップで通常表示に戻る）。スマホ充電中やEcho Show等での「ながら見」用途。通常4.5秒間隔だが、順位表・ランキング・Steam商品名・TOKIO HOT 100など名詞情報だけのグループ（`build_slideshow_items()`の`SLIDESHOW_FAST_GROUP_KEYWORDS`で判定）は1.5秒間隔。スライドショー中は5分おきに自動で`location.reload()`し（ページ自体は1時間おきの再生成のため）、`sessionStorage`でスライドショー中フラグを持たせてリロード後も自動再開する
 
 ## GitHub Pagesでの公開
 
@@ -49,5 +51,6 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 - ウォーカープラスも公式APIではなくHTML構造依存のスクレイピングのため、サイト側の構造変更でイベント欄が壊れる可能性がある
 - GameMakersイベントカレンダーのAPIキーはサイト側の公開JSから抜き出したもので、非公式利用。キー失効やsummaryの【ジャンル】タグ表記変更で欄が壊れる可能性がある。ローカル実行時は`GAMEMAKERS_CALENDAR_API_KEY`を環境変数に設定しないとこの欄だけ空になる
 - プロ野球・J1順位表もYahoo!スポーツのHTML構造依存のスクレイピングのため、サイト側の構造変更で壊れる可能性がある
+- Mリーグ順位表もm-league.jpのトップページのHTML構造依存のスクレイピングのため、サイト側の構造変更で壊れる可能性がある
 - J-WAVE TOKIO HOT 100もHTML構造依存のスクレイピングのため壊れる可能性がある。またSpotifyリンクは検索結果への遷移であり、公式が紐付けた正確な楽曲ページへの直リンクではない（曲名・アーティスト名の表記揺れで違う曲がヒットする可能性がある）
 - `get_with_retry()`は接続タイムアウトの場合、初回に限り1回だけリトライする（GitHub Actions環境からGameMakers RSSへの接続が一時的にタイムアウトした事例への対応）。2回目もタイムアウトした場合や429/5xx以外のエラーはリトライせずそのままスキップ扱いになる

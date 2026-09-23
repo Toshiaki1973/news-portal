@@ -96,6 +96,14 @@ J1_STANDINGS_ROW_RE = re.compile(
     r'<a class="sc-tableValue__team"[^>]*>([^<]+)</a>\s*'
     r'</td>\s*<td class="sc-tableValue__data">(\d+)</td>', re.S)
 
+# Mリーグ（麻雀）: 公式RSS/APIが無いためHTMLスクレイピング。トップページに順位表が
+# 静的HTMLで埋め込まれている。
+MLEAGUE_URL = "https://m-league.jp/"
+MLEAGUE_RANK_RE = re.compile(
+    r'<div class="p-ranking__rank-number is-rank\d+">(\d+)</div>.*?'
+    r'<div class="p-ranking__team-name">([^<]+)</div>.*?'
+    r'<div class="p-ranking__current-point">([^<]+)</div>', re.S)
+
 STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories"
 STEAM_APP_URL = "https://store.steampowered.com/app/{id}/"
 STEAM_ITEMS_PER_GROUP = 10
@@ -514,6 +522,21 @@ def fetch_j1_standings():
     return articles
 
 
+def fetch_mleague_standings():
+    """Mリーグ（麻雀）の順位表を公式サイトのトップページから取得する。"""
+    try:
+        html_text = get_with_retry(MLEAGUE_URL).text
+    except requests.RequestException as e:
+        print(f"  skip Mリーグ順位表: {e}")
+        return []
+    articles = [
+        {"title": f"{rank}位 {team}（{points}）", "link": MLEAGUE_URL}
+        for rank, team, points in MLEAGUE_RANK_RE.findall(html_text)
+    ]
+    print(f"  Mリーグ順位表: {len(articles)}件")
+    return articles
+
+
 def fetch_shinkansen_status():
     """東海道新幹線の運行状況(JR東海公式サイトが内部で読む生JSON)を取得する。"""
     try:
@@ -818,6 +841,8 @@ def build_sections():
     npb = fetch_npb_standings()
     print("J1順位表を取得中...")
     j1 = fetch_j1_standings()
+    print("Mリーグ順位表を取得中...")
+    mleague = fetch_mleague_standings()
     print("スポーツニュースを取得中...")
     sports_news = fetch_rss_group(RSS_FEEDS["sports_news"])
     print("ゲームニュースを取得中...")
@@ -851,6 +876,7 @@ def build_sections():
         {"label": "プロ野球順位表：セ・リーグ", "articles": npb["central"]},
         {"label": "プロ野球順位表：パ・リーグ", "articles": npb["pacific"]},
         {"label": "J1順位表", "articles": j1},
+        {"label": "Mリーグ順位表", "articles": mleague},
     ] + sports_news  # スポーツ関連は末尾
     game_groups = [
         game[0],  # GameMakers
@@ -876,6 +902,26 @@ def build_sections():
         ]},
         {"id": "event", "label": "🎪 イベント（東京・大阪）", "groups": event_groups},
     ]
+
+
+SLIDESHOW_NORMAL_MS = 4500
+SLIDESHOW_FAST_MS = 1500  # 順位・ランキング・商品名など、読むのに時間がかからない名詞情報向け
+SLIDESHOW_FAST_GROUP_KEYWORDS = ("順位", "ランキング", "Steamセール", "Steam新作", "TOKIO HOT 100")
+
+
+def build_slideshow_items(sections):
+    """スライドショー用に、全カラム・全グループの記事を1件ずつのフラットな配列にする。
+    グループ名に順位表・ランキング系のキーワードが含まれる場合は表示時間を短くする。"""
+    items = []
+    for s in sections:
+        for g in s["groups"]:
+            is_fast = any(kw in g["label"] for kw in SLIDESHOW_FAST_GROUP_KEYWORDS)
+            duration = SLIDESHOW_FAST_MS if is_fast else SLIDESHOW_NORMAL_MS
+            for a in g["articles"]:
+                items.append({
+                    "category": s["label"], "group": g["label"], "title": a["title"], "duration": duration,
+                })
+    return items
 
 
 def render_articles(articles):
@@ -907,6 +953,7 @@ def generate_html(sections):
         for s in sections
     )
     sections_html = "\n".join(render_section(s) for s in sections)
+    slideshow_json = json.dumps(build_slideshow_items(sections), ensure_ascii=False).replace("</", "<\\/")
 
     return f'''<!DOCTYPE html>
 <html lang="ja">
@@ -935,6 +982,37 @@ def generate_html(sections):
   }}
   header h1 {{ font-size: 1.1rem; margin: 0; }}
   header .updated {{ font-size: 0.8rem; opacity: 0.8; }}
+  header .header-left {{ display: flex; align-items: center; gap: 10px; }}
+  header .slideshow-btn {{
+    background: #3a3f4b;
+    color: #fff;
+    border: 1px solid #565c6a;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }}
+  header .slideshow-btn:hover {{ background: #4a505e; }}
+
+  .slideshow {{
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #14151a;
+    color: #fff;
+    z-index: 1000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    cursor: pointer;
+  }}
+  .slideshow.active {{ display: flex; }}
+  .slideshow .ss-category {{ font-size: 1.1rem; opacity: 0.7; margin-bottom: 8px; }}
+  .slideshow .ss-group {{ font-size: 1.3rem; opacity: 0.85; margin-bottom: 24px; }}
+  .slideshow .ss-title {{ font-size: 2rem; line-height: 1.5; max-width: 90vw; font-weight: bold; }}
+  .slideshow .ss-hint {{ position: absolute; bottom: 24px; font-size: 0.8rem; opacity: 0.5; }}
   .tabbar {{ display: none; }}
   .portal {{
     display: grid;
@@ -1004,7 +1082,10 @@ def generate_html(sections):
 </head>
 <body>
 <header>
-  <h1>ニュースポータル</h1>
+  <div class="header-left">
+    <h1>ニュースポータル</h1>
+    <button class="slideshow-btn" id="slideshowStart">▶ スライドショー</button>
+  </div>
   <span class="updated">更新: {updated_at}</span>
 </header>
 <nav class="tabbar">
@@ -1013,6 +1094,13 @@ def generate_html(sections):
 <main class="portal">
 {sections_html}
 </main>
+<div class="slideshow" id="slideshow">
+  <div class="ss-category" id="ssCategory"></div>
+  <div class="ss-group" id="ssGroup"></div>
+  <div class="ss-title" id="ssTitle"></div>
+  <div class="ss-hint">画面タップで戻る</div>
+</div>
+<script type="application/json" id="slideshowData">{slideshow_json}</script>
 <script>
   const tabs = document.querySelectorAll(".tab");
   const columns = document.querySelectorAll(".column");
@@ -1022,6 +1110,53 @@ def generate_html(sections):
   }}
   tabs.forEach(t => t.addEventListener("click", () => activate(t.dataset.target)));
   if (tabs.length) activate(tabs[0].dataset.target);
+
+  const slideshowItems = JSON.parse(document.getElementById("slideshowData").textContent);
+  const slideshowEl = document.getElementById("slideshow");
+  const ssCategory = document.getElementById("ssCategory");
+  const ssGroup = document.getElementById("ssGroup");
+  const ssTitle = document.getElementById("ssTitle");
+  const SS_RELOAD_MS = 5 * 60 * 1000;  // ページは1時間おきに再生成されるため、5分おきに再読込して最新の見出しに切り替える
+  let ssIndex = 0;
+  let ssTimer = null;
+  let ssReloadTimer = null;
+
+  function showSlide() {{
+    if (slideshowItems.length === 0) {{
+      ssCategory.textContent = "";
+      ssGroup.textContent = "";
+      ssTitle.textContent = "表示できる見出しがありません";
+      return;
+    }}
+    const item = slideshowItems[ssIndex % slideshowItems.length];
+    ssCategory.textContent = item.category;
+    ssGroup.textContent = item.group;
+    ssTitle.textContent = item.title;
+    ssIndex++;
+    ssTimer = setTimeout(showSlide, item.duration);
+  }}
+
+  function startSlideshow() {{
+    slideshowEl.classList.add("active");
+    ssIndex = 0;
+    showSlide();
+    ssReloadTimer = setInterval(() => location.reload(), SS_RELOAD_MS);
+    try {{ sessionStorage.setItem("slideshowMode", "1"); }} catch (e) {{}}
+  }}
+
+  function stopSlideshow() {{
+    slideshowEl.classList.remove("active");
+    clearTimeout(ssTimer);
+    clearInterval(ssReloadTimer);
+    try {{ sessionStorage.removeItem("slideshowMode"); }} catch (e) {{}}
+  }}
+
+  document.getElementById("slideshowStart").addEventListener("click", startSlideshow);
+  slideshowEl.addEventListener("click", stopSlideshow);
+
+  try {{
+    if (sessionStorage.getItem("slideshowMode") === "1") startSlideshow();
+  }} catch (e) {{}}
 </script>
 </body>
 </html>
