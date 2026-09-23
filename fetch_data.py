@@ -1098,7 +1098,7 @@ def generate_html(sections):
   <div class="ss-category" id="ssCategory"></div>
   <div class="ss-group" id="ssGroup"></div>
   <div class="ss-title" id="ssTitle"></div>
-  <div class="ss-hint">画面タップで戻る</div>
+  <div class="ss-hint">← 前へ ｜ 中央タップ/クリックで終了 ｜ 次へ →　（PCは←→キーでも操作可）</div>
 </div>
 <script type="application/json" id="slideshowData">{slideshow_json}</script>
 <script>
@@ -1121,25 +1121,51 @@ def generate_html(sections):
   let ssTimer = null;
   let ssReloadTimer = null;
 
-  function showSlide() {{
+  function currentItem() {{
+    const len = slideshowItems.length;
+    return slideshowItems[((ssIndex % len) + len) % len];
+  }}
+
+  function renderSlide() {{
     if (slideshowItems.length === 0) {{
       ssCategory.textContent = "";
       ssGroup.textContent = "";
       ssTitle.textContent = "表示できる見出しがありません";
       return;
     }}
-    const item = slideshowItems[ssIndex % slideshowItems.length];
+    const item = currentItem();
     ssCategory.textContent = item.category;
     ssGroup.textContent = item.group;
     ssTitle.textContent = item.title;
+  }}
+
+  function scheduleNext() {{
+    if (slideshowItems.length === 0) return;
+    clearTimeout(ssTimer);
+    ssTimer = setTimeout(() => {{
+      ssIndex++;
+      renderSlide();
+      scheduleNext();
+    }}, currentItem().duration);
+  }}
+
+  function goNext() {{
     ssIndex++;
-    ssTimer = setTimeout(showSlide, item.duration);
+    renderSlide();
+    scheduleNext();
+  }}
+
+  function goPrev() {{
+    ssIndex--;
+    renderSlide();
+    scheduleNext();
   }}
 
   function startSlideshow() {{
     slideshowEl.classList.add("active");
     ssIndex = 0;
-    showSlide();
+    renderSlide();
+    scheduleNext();
     ssReloadTimer = setInterval(() => location.reload(), SS_RELOAD_MS);
     try {{ sessionStorage.setItem("slideshowMode", "1"); }} catch (e) {{}}
   }}
@@ -1152,7 +1178,23 @@ def generate_html(sections):
   }}
 
   document.getElementById("slideshowStart").addEventListener("click", startSlideshow);
-  slideshowEl.addEventListener("click", stopSlideshow);
+
+  slideshowEl.addEventListener("click", (e) => {{
+    const x = e.clientX / window.innerWidth;
+    if (x < 1 / 3) {{
+      goPrev();
+    }} else if (x > 2 / 3) {{
+      goNext();
+    }} else {{
+      stopSlideshow();
+    }}
+  }});
+
+  document.addEventListener("keydown", (e) => {{
+    if (!slideshowEl.classList.contains("active")) return;
+    if (e.key === "ArrowRight") goNext();
+    else if (e.key === "ArrowLeft") goPrev();
+  }});
 
   try {{
     if (sessionStorage.getItem("slideshowMode") === "1") startSlideshow();
