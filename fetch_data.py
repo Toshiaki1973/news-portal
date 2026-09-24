@@ -37,12 +37,13 @@ RSS_FEEDS = {
         {"label": "ギズモード・ジャパン", "url": "https://www.gizmodo.jp/index.xml"},
     ],
     "game": [
-        {"label": "GameMakers", "url": "https://gamemakers.jp/category/news/feed/"},
+        # この並び順のまま表示される(toshi指定)
+        {"label": "IGDA日本", "url": "https://igda.jp/feed/"},
+        {"label": "gamebiz（業界）", "url": "https://gamebiz.jp/feed.rss"},
+        {"label": "Kotaku（海外）", "url": "https://kotaku.com/feed"},
         {"label": "4Gamer（一般）", "url": "https://www.4gamer.net/rss/index.xml"},
         {"label": "AUTOMATON（インディー中心）", "url": "https://automaton-media.com/feed/"},
-        {"label": "gamebiz（業界）", "url": "https://gamebiz.jp/feed.rss"},
-        {"label": "IGDA日本", "url": "https://igda.jp/feed/"},
-        {"label": "Kotaku（海外）", "url": "https://kotaku.com/feed"},
+        {"label": "GameMakers", "url": "https://gamemakers.jp/category/news/feed/"},
     ],
     "hachima": [
         {"label": "はちま起稿", "url": "http://blog.esuteru.com/index.rdf"},
@@ -882,13 +883,10 @@ def build_sections():
         {"label": "J1順位表", "articles": j1},
         {"label": "Mリーグ順位表", "articles": mleague},
     ] + sports_news  # スポーツ関連は末尾
-    game_groups = [
-        game[0],  # GameMakers
+    game_groups = game + [  # game = RSS_FEEDS["game"]の並び順(末尾がGameMakers)
         {"label": "GameMakers イベントカレンダー（カンファレンス・展示会）", "articles": gamemakers_events},
-        game[1],  # 4Gamer
         {"label": "Steamセール", "articles": steam["specials"]},
         {"label": "Steam新作", "articles": steam["new_releases"]},
-        game[2],  # AUTOMATON
     ] + hachima  # はちま起稿はゲームニュース欄の最後に表示
 
     return [
