@@ -34,11 +34,15 @@ RSS_FEEDS = {
         {"label": "Yahoo!ニューストピックス", "url": "https://news.yahoo.co.jp/rss/topics/top-picks.xml"},
         {"label": "CNN.co.jp（海外）", "url": "https://feeds.cnn.co.jp/rss/cnn/cnn.rdf"},
         {"label": "AI Watch", "url": "https://ai.watch.impress.co.jp/data/rss/1.0/aiw/feed.rdf"},
+        {"label": "ギズモード・ジャパン", "url": "https://www.gizmodo.jp/index.xml"},
     ],
     "game": [
         {"label": "GameMakers", "url": "https://gamemakers.jp/category/news/feed/"},
         {"label": "4Gamer（一般）", "url": "https://www.4gamer.net/rss/index.xml"},
         {"label": "AUTOMATON（インディー中心）", "url": "https://automaton-media.com/feed/"},
+        {"label": "gamebiz（業界）", "url": "https://gamebiz.jp/feed.rss"},
+        {"label": "IGDA日本", "url": "https://igda.jp/feed/"},
+        {"label": "Kotaku（海外）", "url": "https://kotaku.com/feed"},
     ],
     "hachima": [
         {"label": "はちま起稿", "url": "http://blog.esuteru.com/index.rdf"},

@@ -17,11 +17,11 @@ python fetch_data.py --open     # 生成後にブラウザで開く
 
 ## データソース
 
-- 一般ニュース: NHKニュース、Yahoo!ニューストピックス、CNN.co.jp（海外ニュース）、AI Watch（RSS）
+- 一般ニュース: NHKニュース、Yahoo!ニューストピックス、CNN.co.jp（海外ニュース）、AI Watch、ギズモード・ジャパン（RSS）
   + プロ野球順位表（セ・パ）、J1順位表: どちらも公式RSS/APIが無いためYahoo!スポーツ（baseball.yahoo.co.jp / soccer.yahoo.co.jp）をHTMLスクレイピング。Yahoo!ニューストピックスの直下に配置
   + Mリーグ（麻雀）順位表: m-league.jpのトップページに埋め込まれた順位表をHTMLスクレイピング。J1順位表の直下に配置
   + スポーツニュース: Yahoo!ニュース スポーツカテゴリ（RSS）。順位表の下に配置
-- ゲームニュース: GameMakers（開発者向け）、4Gamer（一般）、AUTOMATON（インディー中心）（RSS）
+- ゲームニュース: GameMakers（開発者向け）、4Gamer（一般）、AUTOMATON（インディー中心）、gamebiz（業界）、IGDA日本、Kotaku（海外）（RSS）
   + GameMakersイベントカレンダー（gamemakers.jp/event/、カンファレンス・展示会のみ）: Google Calendar APIから直接取得（APIキーは`GAMEMAKERS_CALENDAR_API_KEY`環境変数）。今日から31日分、summary末尾の【ジャンル】タグで絞り込み
 - 映画: eiga.com（公式RSS/APIが無いためHTMLスクレイピング。program/eiga-movie-infoと同じ正規表現実装）
   + 動画配信ランキング（Amazon Prime Video/Netflix/U-NEXT、eiga.com/streaming/配下）: 各ページに埋め込まれたschema.orgのJSON-LD(ItemList)から取得。こちらは正規表現ではなくJSON解析
