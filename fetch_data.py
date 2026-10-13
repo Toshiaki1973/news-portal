@@ -58,6 +58,23 @@ RSS_FEEDS = {
     ],
 }
 
+# 日記用のニュースログ: 毎時のRSSをそのまま output/daily/YYYY-MM-DD.jsonl に貯めるだけ(集計は日記側で一気にやる)。
+# Pagesはartifactごと差し替わるので、毎回Pagesから直近の分を取り戻してから追記する。
+NEWS_LOG_URL = "https://toshiaki1973.github.io/news-portal/daily/{date}.jsonl"
+NEWS_LOG_DIR = os.path.join(os.path.dirname(__file__), "output", "daily")
+NEWS_LOG_KEEP_DAYS = 7
+# RSS_FEEDS["news"]で取得済みのものはラベルで拾う
+NEWS_LOG_REGIONS = {
+    "NHKニュース": "国内",
+    "Yahoo!ニューストピックス": "国内",
+    "CNN.co.jp（海外）": "海外",
+}
+# ポータルには出さず、ログにだけ貯めるもの
+NEWS_LOG_EXTRA_FEEDS = [
+    {"label": "NHKニュース（国際）", "url": "https://www.nhk.or.jp/rss/news/cat6.xml", "region": "海外"},
+    {"label": "BBC News Japan", "url": "https://feeds.bbci.co.uk/japanese/rss.xml", "region": "海外"},
+]
+
 # eiga.comには公式RSS/APIが無いためHTMLスクレイピング（program/eiga-movie-infoと同じ実装）
 EIGA_UPCOMING_URL = "https://eiga.com/upcoming/"
 EIGA_RANKING_URL = "https://eiga.com/ranking/access/"
@@ -301,6 +318,54 @@ def fetch_rss_group(feeds):
         print(f"  {feed['label']}: {len(articles)}件")
         groups.append({"label": feed["label"], "articles": articles})
     return groups
+
+
+def restore_news_log(today):
+    """Pagesに上がっている直近NEWS_LOG_KEEP_DAYS日分のログを output/daily/ に取り戻す。
+    手元に既にあるファイルは上書きしない(ローカルで続けて流したとき用)。"""
+    os.makedirs(NEWS_LOG_DIR, exist_ok=True)
+    for i in range(NEWS_LOG_KEEP_DAYS):
+        date = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        path = os.path.join(NEWS_LOG_DIR, f"{date}.jsonl")
+        if os.path.exists(path):
+            continue
+        try:
+            r = requests.get(NEWS_LOG_URL.format(date=date), headers=HEADERS,
+                             params={"t": int(time.time())}, timeout=20)
+            if r.status_code == 404:
+                continue
+            r.raise_for_status()
+        except requests.RequestException as e:
+            print(f"  skip ログ取り戻し {date}: {e}")
+            continue
+        with open(path, "wb") as f:
+            f.write(r.content)
+        print(f"  ログ取り戻し {date}: {len(r.content.splitlines())}行")
+
+
+def append_news_log(news_groups):
+    """主要ニュースの見出しを今日のログに追記する。失敗してもポータル生成は止めない。"""
+    try:
+        now = datetime.now(JST)
+        restore_news_log(now)
+        groups = [g for g in news_groups if g["label"] in NEWS_LOG_REGIONS]
+        regions = dict(NEWS_LOG_REGIONS)
+        for g in fetch_rss_group(NEWS_LOG_EXTRA_FEEDS):
+            groups.append(g)
+        for feed in NEWS_LOG_EXTRA_FEEDS:
+            regions[feed["label"]] = feed["region"]
+        t = now.strftime("%Y-%m-%dT%H:%M")
+        lines = [
+            json.dumps({"t": t, "source": g["label"], "region": regions[g["label"]],
+                        "title": a["title"], "link": a["link"]}, ensure_ascii=False)
+            for g in groups for a in g["articles"]
+        ]
+        path = os.path.join(NEWS_LOG_DIR, f"{now.strftime('%Y-%m-%d')}.jsonl")
+        with open(path, "a", encoding="utf-8") as f:
+            f.writelines(line + "\n" for line in lines)
+        print(f"  ニュースログ: {len(lines)}行を追記")
+    except Exception as e:
+        print(f"  skip ニュースログ: {e}")
 
 
 def fetch_movies():
@@ -842,6 +907,8 @@ def build_sections():
     weather = fetch_weather()
     print("一般ニュースを取得中...")
     news = fetch_rss_group(RSS_FEEDS["news"])
+    print("日記用ニュースログを追記中...")
+    append_news_log(news)
     print("プロ野球順位表を取得中...")
     npb = fetch_npb_standings()
     print("J1順位表を取得中...")
