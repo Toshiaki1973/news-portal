@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ニュースポータル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Allura&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #f6f3ee;
+    --ink: #2f2a27;
+    --soft: #8a7f78;
+    --line: #c9bdb4;
+    --link: #2f2a27;
+    --accent: #d98ca0;
+    --hand: "Klee One", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    --script: "Allura", "Segoe Script", cursive;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #1f1c1a; --ink: #ebe4dc; --soft: #a39890; --line: #4a423d; --link: #ebe4dc; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--hand);
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 22px 6px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 auto; }
+  .brand .name { font-family: var(--script); font-size: 1.9rem; line-height: 1; white-space: nowrap; }
+  .brand .count { font-size: 0.8rem; color: var(--soft); white-space: nowrap; }
+  .tbtn {
+    font-family: var(--hand);
+    background: none;
+    border: none;
+    color: var(--ink);
+    cursor: pointer;
+    padding: 6px 4px;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+  }
+  .tbtn:hover { opacity: 0.6; }
+  .menu { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .menu i { display: block; width: 34px; height: 1px; background: var(--ink); border-radius: 1px; }
+  .menu i:nth-child(2) { width: 30px; transform: translateX(1px) rotate(-0.6deg); }
+  .menu i:nth-child(3) { width: 32px; transform: rotate(0.5deg); }
+  .menu span { font-size: 0.72rem; letter-spacing: 0.18em; margin-bottom: 2px; }
+  #auto.on { color: var(--accent); }
+  .progress { flex: 0 0 2px; margin: 0 22px; }
+  .progress div { height: 2px; width: 0; background: var(--accent); border-radius: 2px; opacity: 0.8; }
+  main {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 6px 64px 56px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .page { display: none; max-width: 1100px; margin: 0 auto; }
+  .page.active { display: block; animation: fade .35s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .page .script { font-family: var(--script); font-size: 2.6rem; line-height: 1; margin: 14px 0 0; color: var(--soft); }
+  .page h2 { font-weight: 600; font-size: 1.5rem; margin: 2px 0 2px; letter-spacing: 0.04em; }
+  .hand-line { display: block; width: 100%; height: 18px; color: var(--ink); opacity: 0.75; margin-bottom: 6px; }
+  .page ul { list-style: none; margin: 0; padding: 0; }
+  .page li {
+    padding: 12px 2px 13px;
+    line-height: 1.6;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='6'><path d='M0 3 Q15 1.2 30 3 T60 3 T90 3.2 T120 3' fill='none' stroke='%23c9bdb4' stroke-width='1'/></svg>") repeat-x left bottom;
+    break-inside: avoid;
+  }
+  .page li:last-child { background: none; }
+  .page a { color: var(--link); text-decoration: none; font-size: 1.06rem; }
+  .page a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  @media (min-width: 1100px) { .page ul.long { columns: 2; column-gap: 56px; } }
+  .empty { color: var(--soft); font-size: 0.95rem; }
+  .side {
+    position: fixed;
+    top: 50%;
+    width: 46px;
+    height: 46px;
+    margin-top: -23px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--ink);
+    opacity: 0.55;
+    cursor: pointer;
+    z-index: 5;
+  }
+  .side:hover { opacity: 1; }
+  .side svg { width: 100%; height: 100%; }
+  #prev { left: 10px; transform: scaleX(-1); }
+  #next { right: 10px; }
+  footer {
+    position: fixed;
+    left: 22px;
+    bottom: 10px;
+    font-size: 0.72rem;
+    color: var(--soft);
+    letter-spacing: 0.06em;
+    background: var(--paper);
+    padding: 2px 6px 2px 0;
+  }
+  footer b { font-weight: 600; margin-right: 8px; letter-spacing: 0.12em; }
+  .toc {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--paper);
+    overflow-y: auto;
+    padding: 70px 64px 60px;
+    z-index: 10;
+  }
+  .toc.open { display: block; }
+  .toc h3 { font-weight: 600; font-size: 1rem; margin: 22px 0 8px; display: flex; align-items: baseline; gap: 12px; }
+  .toc h3 .script { font-family: var(--script); font-weight: 400; font-size: 1.9rem; color: var(--soft); }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 22px; }
+  .toc a { color: var(--ink); text-decoration: none; font-size: 0.98rem; padding: 4px 0; border-bottom: 1px solid transparent; }
+  .toc a:hover { border-bottom-color: var(--line); }
+  .toc a.empty { color: var(--soft); opacity: 0.6; }
+  .toc a.current { border-bottom-color: var(--accent); }
+  .toc .close { position: fixed; top: 16px; right: 22px; }
+  @media (max-width: 600px) {
+    header { padding: 12px 14px 4px; }
+    .brand .name { font-size: 1.6rem; }
+    main { padding: 4px 18px 64px; }
+    .page .script { font-size: 2.2rem; }
+    .page h2 { font-size: 1.25rem; }
+    .page a { font-size: 1rem; }
+    .side { top: auto; bottom: 8px; margin-top: 0; width: 40px; height: 40px; opacity: 0.7; }
+    footer { left: 50%; transform: translateX(-50%); bottom: 18px; background: none; }
+    .toc { padding: 64px 20px 40px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="name">News Portal</span><span class="count" id="count"></span></div>
+  <button class="tbtn" id="auto" title="自動でページを送る（スペース）">▷ auto</button>
+  <button class="tbtn menu" id="tocBtn" title="目次"><span>MENU</span><i></i><i></i><i></i></button>
+</header>
+<div class="progress"><div id="bar"></div></div>
+<main id="main">
+
+    <section class="page empty-page" id="shinkansen" data-index="0" data-sec="10">
+      <p class="script">Today&#x27;s news</p>
+      <h2>東海道新幹線 運行状況</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.2 Q23 9.2 47 7.7 Q114 6.1 134 7.1 Q189 8.2 205 9.5 Q258 10.8 280 8.9 Q339 6.9 353 9.3 Q404 11.8 427 9.4 Q490 7.0 508 6.8 Q559 6.6 573 7.4 T600 8.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <p class="empty">取得できませんでした</p>
+    </section>
+
+    <section class="page" id="weather" data-index="1" data-sec="10">
+      <p class="script">Today&#x27;s news</p>
+      <h2>今日・明日の天気</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.3 Q19 9.3 38 9.0 Q96 8.7 116 7.5 Q177 6.4 197 7.7 Q254 9.1 273 7.5 Q333 5.9 356 8.6 Q422 11.3 442 10.3 Q502 9.3 522 9.2 Q571 9.1 581 9.0 T600 8.9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://weather.yahoo.co.jp/weather/jp/13/4410.html" target="_blank" rel="noopener">東京・今日 霧雨 最高13℃ / 最低6℃</a></li>
+<li><a href="https://weather.yahoo.co.jp/weather/jp/13/4410.html" target="_blank" rel="noopener">東京・明日 快晴 最高15℃ / 最低4℃</a></li>
+<li><a href="https://weather.yahoo.co.jp/weather/jp/27/6200.html" target="_blank" rel="noopener">大阪・今日 曇り 最高12℃ / 最低8℃</a></li>
+<li><a href="https://weather.yahoo.co.jp/weather/jp/27/6200.html" target="_blank" rel="noopener">大阪・明日 晴れ時々曇り 最高15℃ / 最低5℃</a></li></ul>
+    </section>
+
+    <section class="page" id="nhk" data-index="2" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>NHKニュース</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.7 Q23 8.7 46 8.5 Q108 8.3 124 7.3 Q173 6.2 188 8.8 Q235 11.4 250 10.5 Q296 9.5 314 8.0 Q371 6.4 393 9.3 Q456 12.1 474 10.0 Q533 7.8 555 8.5 T600 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://news.web.nhk/newsweb/na/nd-20261128de82900" target="_blank" rel="noopener">フィギュアNHK杯 男子シングル マリニンが優勝【全種目 結果】</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261128de83073" target="_blank" rel="noopener">台湾統一地方選挙 激戦の台北市長選挙で国民党現職が勝利宣言</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261128de83063" target="_blank" rel="noopener">フィギュア GPファイナル進出者 女子3人 男子1人 ペア1組に</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261128de83037" target="_blank" rel="noopener">中学生不明 父親が新たな写真公開し情報提供求める 福島 郡山</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261127de82799" target="_blank" rel="noopener">宮城の山中の2人遺体 1人は一部白骨化 身元の手がかりなし</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261128de83075" target="_blank" rel="noopener">アフガン東部の鉱山開発会社で爆発 子ども7人死亡 90人超けが</a></li>
+<li><a href="https://news.web.nhk/newsweb/na/nd-20261128de82966" target="_blank" rel="noopener">“エヌビディア半導体 輸出規制先の中国で確認”米メディア</a></li></ul>
+    </section>
+
+    <section class="page" id="yahoo" data-index="3" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>Yahoo!ニューストピックス</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.2 Q14 8.2 29 7.3 Q76 6.3 95 8.8 Q154 11.4 175 9.2 Q236 7.0 256 8.8 Q312 10.5 328 8.9 Q379 7.3 398 7.2 Q452 7.2 467 7.0 Q515 6.7 531 7.2 Q574 7.7 583 8.7 T600 9.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://news.yahoo.co.jp/pickup/6604330?source=rss" target="_blank" rel="noopener">高市氏側 昨年企業Gから分散献金</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604340?source=rss" target="_blank" rel="noopener">政党収入 グッズ販売で数千万円も</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604349?source=rss" target="_blank" rel="noopener">車5台が絡む事故 女性2人心肺停止</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604350?source=rss" target="_blank" rel="noopener">第3子から1千万円給付案 街の声は</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604336?source=rss" target="_blank" rel="noopener">亡き夫の愛車復活も白煙 妻の思い</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604342?source=rss" target="_blank" rel="noopener">マリニン 演技直前めまいや吐き気</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604343?source=rss" target="_blank" rel="noopener">大竹しのぶら出演舞台 直前に中止</a></li>
+<li><a href="https://news.yahoo.co.jp/pickup/6604335?source=rss" target="_blank" rel="noopener">LiSAが離婚 今後も協力し子育て</a></li></ul>
+    </section>
+
+    <section class="page" id="nikkei" data-index="4" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>日経新聞（速報）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.9 Q18 8.9 36 9.4 Q95 9.8 117 8.9 Q177 8.1 191 7.4 Q236 6.8 252 7.4 Q305 8.1 324 8.5 Q384 8.9 403 10.2 Q461 11.4 480 10.2 Q538 9.1 559 8.8 T600 8.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.nikkei.com/article/DGXZQODH281OY0Y6A121C2000000/" target="_blank" rel="noopener">女王・桑木志帆、有終の美へ光った小技　ゴルフリコー杯単独首位に</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOKC282RL0Y6A121C2000000/" target="_blank" rel="noopener">フィギュア、千葉百音ら日本女子3人がGPファイナル進出　男子1人</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQODH280IJ0Y6A121C2000000/" target="_blank" rel="noopener">今平周吾が首位浮上、カシオゴルフ第3R</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOKC282NB0Y6A121C2000000/" target="_blank" rel="noopener">バレーボールSVリーグ、名古屋が10勝目　サントリーに3-1</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQODH282560Y6A121C2000000/" target="_blank" rel="noopener">フィギュア・千葉百音2位　「楽しむ」はずがジャンプ不発、NHK杯</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOUC281GK0Y6A121C2000000/" target="_blank" rel="noopener">ZOZO、最大594万人分の情報流出の恐れ　不正アクセスで</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOKC282N20Y6A121C2000000/" target="_blank" rel="noopener">J2、大宮が暫定2位浮上　今治に競り勝つ</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOKC282NS0Y6A121C2000000/" target="_blank" rel="noopener">ソフトバンク・ドラフト1位鈴木泰成「スタイル貫く」　入団合意</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOKC282O70Y6A121C2000000/" target="_blank" rel="noopener">ロッテ、ドラフト1位左腕の米沢友翔が入団合意　「10勝と新人王」</a></li>
+<li><a href="https://www.nikkei.com/article/DGXZQOGM207F80Q6A121C2000000/" target="_blank" rel="noopener">台北市長選、野党・国民党の蔣万安氏が再選　将来の総統候補へ頭角</a></li></ul>
+    </section>
+
+    <section class="page" id="cnn-co-jp" data-index="5" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>CNN.co.jp（海外）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.2 Q21 10.2 41 11.0 Q104 11.7 125 9.6 Q186 7.6 205 7.5 Q257 7.5 271 7.8 Q323 8.2 346 9.8 Q413 11.4 433 10.9 Q488 10.4 503 8.1 Q549 5.8 566 7.4 T600 9.0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.cnn.co.jp/fringe/35255546.html?ref=rss" target="_blank" rel="noopener">火星表面に落ちていた謎の「ひも」、NASA探査車が発見　22年</a></li>
+<li><a href="https://www.cnn.co.jp/usa/35255542.html?ref=rss" target="_blank" rel="noopener">【分析】トランプ氏が見せつけるむき出しの力、驚くべき行動は何を意味するか</a></li>
+<li><a href="https://www.cnn.co.jp/fringe/35255541.html?ref=rss" target="_blank" rel="noopener">「有害物質の不名誉の殿堂」、米小売り16社が最低評価　プラスチック化学物質などの削減不十分</a></li>
+<li><a href="https://www.cnn.co.jp/usa/35255540.html?ref=rss" target="_blank" rel="noopener">アメリカン航空の旅客機2機、地上走行中に主翼が接触　「ウィングレット」脱落</a></li>
+<li><a href="https://www.cnn.co.jp/showbiz/35255539.html?ref=rss" target="_blank" rel="noopener">WWEのスター選手、ブロンソン・リードさん38歳で死去　死因は「合併症」</a></li>
+<li><a href="https://www.cnn.co.jp/usa/35255538.html?ref=rss" target="_blank" rel="noopener">「イラク首相の取り組みを支持」、トランプ氏の投稿の背景に何が？</a></li>
+<li><a href="https://www.cnn.co.jp/travel/35255532.html?ref=rss" target="_blank" rel="noopener">樹齢300～500年の名木にチェーンソーで傷、警察が「愚か者」の行方追う　豪州</a></li>
+<li><a href="https://www.cnn.co.jp/world/35255529.html?ref=rss" target="_blank" rel="noopener">プーチン氏の盟友ルカシェンコ氏、ウクライナの領土巡るロシアの主張に疑問符　「その理屈ならロシアはモンゴルに」</a></li>
+<li><a href="https://www.cnn.co.jp/fringe/35255518.html?ref=rss" target="_blank" rel="noopener">1人目妊娠中に2人目を妊娠、「過剰受胎」の女性が驚き語る　20年英</a></li>
+<li><a href="https://www.cnn.co.jp/usa/35255511.html?ref=rss" target="_blank" rel="noopener">バンス氏に代わる大統領候補を模索する共和党　「知事はどうだ？」</a></li></ul>
+    </section>
+
+    <section class="page" id="ai-watch" data-index="6" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>AI Watch</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.5 Q17 8.5 34 7.5 Q90 6.5 113 8.7 Q179 10.8 199 10.0 Q257 9.1 272 7.9 Q325 6.8 346 7.1 Q405 7.4 421 7.6 Q471 7.8 489 8.0 Q545 8.2 563 8.2 T600 8.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://ai.watch.impress.co.jp/docs/news/2160085.html" target="_blank" rel="noopener">子どもの生成AI利用、思考力低下や誤情報に懸念 KADOKAWA調査</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2160087.html" target="_blank" rel="noopener">フォーティエンス、AI活用のPLM導入支援サービスを開始 食品・飲料・日用品・化粧品などの消費財メーカー向け</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2160057.html" target="_blank" rel="noopener">高市総理、AI関連企業との意見交換会でフィジカルAIを強力に推進する意向を改めて表明</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2160029.html" target="_blank" rel="noopener">NVIDIAのローカルAI向けPC「RTX Spark コンパクト デスクトップ」発売、ASUSなど3社から</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2160003.html" target="_blank" rel="noopener">NTTドコモビジネスなど、WiGigとMECで自動運転バス実証 ディーゼルバス「エルガ」で大阪シティバスの一部区間を運行</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2159967.html" target="_blank" rel="noopener">羽田空港でAIコンシェルジュ「miniMORK AI」の実証実験を開始</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2159968.html" target="_blank" rel="noopener">KDDIら、AIが約11,600枚の画像からクマを識別し対策実証 au Starlink Direct for IoTとドローン活用で遠隔確認</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2159940.html" target="_blank" rel="noopener">ソフトバンクのAIクラウドOS、日本初のCNCF認証取得</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2159931.html" target="_blank" rel="noopener">KDDIアイレット、自社データでDatabricksを短期検証する新サービス</a></li>
+<li><a href="https://ai.watch.impress.co.jp/docs/news/2159883.html" target="_blank" rel="noopener">「iFLYTEK ブラックフライデーセール」で全10製品が最大37%OFF Amazon.co.jp、全国家電量販店、公式オンラインストアで販売</a></li></ul>
+    </section>
+
+    <section class="page" id="itmedia-ai" data-index="7" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>ITmedia AI+</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 7.8 Q20 7.8 41 8.8 Q97 9.8 113 9.8 Q164 9.8 184 10.8 Q244 11.8 264 10.4 Q322 9.0 339 10.5 Q390 12.1 408 10.0 Q463 8.0 483 6.9 Q538 5.8 553 7.6 Q587 9.4 591 9.5 T600 9.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.itmedia.co.jp/enterprise/articles/2611/26/news037.html" target="_blank" rel="noopener">AIリスク監査の実施、わずか5.7％　内部監査が追い付かない「もう一つのリスク」とは？</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2611/27/news038.html" target="_blank" rel="noopener">電通が「Geminiを使いこなすFDE」ら3000人育成プログラムを開始　その内容とは？</a></li>
+<li><a href="https://atmarkit.itmedia.co.jp/ait/articles/2611/27/news035.html" target="_blank" rel="noopener">AIエージェントの行動が「適切か暴走か」をどう見極める？　Googleが明かすテストの盲点</a></li>
+<li><a href="https://www.itmedia.co.jp/enterprise/articles/2611/27/news025.html" target="_blank" rel="noopener">「コスト削減」の“次”の成果、どう設定する？　ビジネス変革に結び付けるための「期待の中身」</a></li>
+<li><a href="https://www.itmedia.co.jp/aiplus/article/2611/27/2000003505/" target="_blank" rel="noopener">生成AI登場で人員増えた部門、減った部門は？　デロイト調査</a></li>
+<li><a href="https://monoist.itmedia.co.jp/mn/articles/2611/27/news050.html" target="_blank" rel="noopener">アマダと日立、AIエージェントのPoCで効果確認 フィジカルAIの現場実装へ</a></li>
+<li><a href="https://www.itmedia.co.jp/aiplus/article/2611/26/2000003494/" target="_blank" rel="noopener">「Gemini 4 Neon」が実際の標高データからスキーシミュレーターを開発――Google公式が勧める利用例まとめ</a></li>
+<li><a href="https://www.itmedia.co.jp/aiplus/article/2611/26/2000003470/" target="_blank" rel="noopener">Obsidian公式の「エージェント向け」スキル集が登場　Vault操作法とファイル形式をひとまとめに</a></li>
+<li><a href="https://www.itmedia.co.jp/aiplus/article/2611/26/2000003495/" target="_blank" rel="noopener">GPT-6.2の使用量「誤って割引されていた」　修正後はAstraで上限に40％早く達する見込み</a></li>
+<li><a href="https://www.itmedia.co.jp/news/article/2611/26/2000003447/" target="_blank" rel="noopener">飲食店の“AI商品画像”は景品表示法違反にならないの？　弁護士の見解</a></li></ul>
+    </section>
+
+    <section class="page" id="gizmodo" data-index="8" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>ギズモード・ジャパン</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.3 Q22 8.3 44 8.9 Q111 9.4 134 7.7 Q197 6.1 213 7.2 Q261 8.4 275 7.7 Q319 6.9 333 6.9 Q375 6.8 389 7.7 Q433 8.7 449 9.2 Q497 9.8 512 10.4 Q558 10.9 572 10.1 T600 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.gizmodo.jp/article/2611-yibooom-magnetic-glasses-holder/" target="_blank" rel="noopener">頭に乗せるの、もう卒業。磁力でどこでも“メガネ置き場”が作れる999円グッズ</a></li>
+<li><a href="https://www.gizmodo.jp/article/2611-apple-watch-ultra-titanium-milanese-loop/" target="_blank" rel="noopener">ゴムバンド並みに軽く、布のようになめらか。Apple Watch「チタニウムミラネーゼループ」は最高の純正バンドです</a></li>
+<li><a href="https://www.gizmodo.jp/article/306452-2611-amazon-cio-magnethenkanadaptor/" target="_blank" rel="noopener">充電ストレスを軽減。ケーブルを「マグネット化」する手があった</a></li>
+<li><a href="https://www.gizmodo.jp/article/nape-pro-se-dj/" target="_blank" rel="noopener">【動画追加】「Nape Pro」はDJもできます。DJ機材専門店・OTAIRECORDに売り込んできた【設定ファイル公開】</a></li>
+<li><a href="https://www.gizmodo.jp/article/2611-trumps-social-media-early-access-api/" target="_blank" rel="noopener">トランプ氏の投稿を「数ミリ秒はやく読む権利」が売れているらしい。月額最大1600万円</a></li>
+<li><a href="https://www.gizmodo.jp/article/2611-top500-supercomputer-fugaku-security-incident/" target="_blank" rel="noopener">情報漏洩はスパコンにも…。世界ランク1位は中国のまま、9位の富岳は停止中で、切ない</a></li>
+<li><a href="https://www.gizmodo.jp/article/2611-wind-turbine-blade-recycling-graphene/" target="_blank" rel="noopener">頑丈すぎて捨てられない風力ブレード、一瞬で2000℃に加熱してグラフェンに変える研究</a></li>
+<li><a href="https://www.gizmodo.jp/article/porsche-550-j_ev_reboot/" target="_blank" rel="noopener">ポルシェの伝説的レーシングカーがフルEVで復活。公道は走れないのに1,450万円…</a></li>
+<li><a href="https://www.gizmodo.jp/article/2611-dqm4-bianca-flora-switch2-sale/" target="_blank" rel="noopener">『ドラクエモンスターズ4』がいよいよ来週発売、事前購入ならちょっと安いぞ</a></li>
+<li><a href="https://www.gizmodo.jp/article/2611-anker-soundcore-liberty-5-pro/" target="_blank" rel="noopener">Ankerのハイエンドイヤホン「Soundcore Liberty 5 Pro」、早くも20％オフで堂々登場</a></li></ul>
+    </section>
+
+    <section class="page" id="gigazine" data-index="9" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>GIGAZINE</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.4 Q23 8.4 46 7.5 Q109 6.7 125 8.7 Q178 10.7 197 11.1 Q249 11.6 263 10.2 Q314 8.8 338 9.3 Q402 9.8 420 9.4 Q473 8.9 492 7.6 Q548 6.2 565 7.7 T600 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://gigazine.net/news/20261128-clickbait-paradox/" target="_blank" rel="noopener">正しい情報ほど煽りタイトルは逆効果で信頼性を失ってしまうという研究結果</a></li>
+<li><a href="https://gigazine.net/news/20261128-gundam-seed-freedom-zero-trailer/" target="_blank" rel="noopener">『機動戦士ガンダムSEED FREEDOM ZERO』本予告映像公開、主題歌は西川貴教 with t.komuro＆EDはSee-Saw</a></li>
+<li><a href="https://gigazine.net/news/20261128-pc-deal-check/" target="_blank" rel="noopener">組み立て済みPCをパーツごとに価格表示しおトクかどうか自動判定してくれるサイト「PC Deal Check」</a></li>
+<li><a href="https://gigazine.net/news/20261128-google-fitbit-edge-review/" target="_blank" rel="noopener">1週間以上バッテリーが持続するスマートウォッチ「Google Fitbit Edge」を1カ月以上使ってみたよレビュー</a></li>
+<li><a href="https://gigazine.net/news/20261128-filebrowser-quantum/" target="_blank" rel="noopener">無料で使えるブラウザベースのファイルマネージャー「FileBrowser Quantum」、超高速検索・複数ユーザー管理・アクセス制御・期限やパスワード付き共有・ファイルプレビュー・編集などができてローカルでセルフホスト可能</a></li>
+<li><a href="https://gigazine.net/news/20261128-remote-work-costs-21-minutes-exercise/" target="_blank" rel="noopener">リモートワークをすると1日あたり「21分」の運動時間を失うという研究結果</a></li>
+<li><a href="https://gigazine.net/news/20261128-china-double-11-iphone-domination/" target="_blank" rel="noopener">AppleのiPhoneは中国最大のネット通販セールイベントで最も売れたスマホ10機種のうち6機種を占める</a></li>
+<li><a href="https://gigazine.net/news/20261128-light-speed-discovered-350-years-ago/" target="_blank" rel="noopener">人類は350年前にどうやって「光にも速さがある」と気づいたのか？</a></li>
+<li><a href="https://gigazine.net/news/20261128-fake-911-call-ai/" target="_blank" rel="noopener">AI音声による虚偽通報が深刻化</a></li>
+<li><a href="https://gigazine.net/news/20261127-d2/" target="_blank" rel="noopener">シンプルな構文で美しい図を自動生成する「D2」が進化、非営利化で独自レイアウトエンジンもオープンソース化</a></li></ul>
+    </section>
+
+    <section class="page" id="hatena-it" data-index="10" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>はてブ テクノロジー</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.1 Q23 8.1 47 7.6 Q117 7.2 140 8.5 Q206 9.8 225 8.4 Q282 7.0 300 9.2 Q355 11.4 374 9.2 Q427 6.9 444 9.1 Q500 11.2 523 10.0 Q577 8.9 585 9.1 T600 9.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://kei-1010.hatenablog.com/entry/2026/11/27/133416" target="_blank" rel="noopener">なぜAIは超難問を解けるのに、あなたの現場では“綺麗なゴミ”を量産するのか？ - サッとぶ</a></li>
+<li><a href="https://togetter.com/li/2776106" target="_blank" rel="noopener">人類はまだWin+Shift+Tで画像に表示された文字をOCRでコピー出来ることを知らない…ただしMicrosoft PowerToysを入れる必要がある</a></li>
+<li><a href="https://tjo.hatenablog.com/entry/2026/11/28/185602" target="_blank" rel="noopener">生成AIは知的労働能力を「ドーピング」することはできるが、「定着」させることはできない - 渋谷駅前で働くデータサイエンティストのブログ</a></li>
+<li><a href="https://zenn.dev/miraizuk/articles/ae8db2bc3ff561" target="_blank" rel="noopener">古い PHP / Laravel の脆弱性対応は、Rector と AI でだいたい簡単に終わる</a></li>
+<li><a href="https://zenn.dev/kantacky/articles/b5a03eab70c7b1" target="_blank" rel="noopener">パスキーは最強で美しいよ、正しく実装すればね</a></li>
+<li><a href="https://speakerdeck.com/yossyds/deta-saientisuto-no-claude-code-katsuyoujutsu" target="_blank" rel="noopener">データサイエンティストの Claude Code 活用術-Claude Code にデータ分析をさせる方法論</a></li>
+<li><a href="https://commuter-inflow-map.idoajob.chatgpt.site/?city=none" target="_blank" rel="noopener">通勤流出入マップ</a></li>
+<li><a href="https://zenn.dev/nextbeat/articles/b0ccca979da06b" target="_blank" rel="noopener">作業を止めずに進めるClaude Codeの/btw・/fork・/rewindなどの使い分け</a></li>
+<li><a href="https://speakerdeck.com/mirakui/20261127-yapc-lt" target="_blank" rel="noopener">CTOからエンジニアへ</a></li>
+<li><a href="https://www.watch.impress.co.jp/docs/series/kodera/2159299.html" target="_blank" rel="noopener">腰を守ろう。座り仕事にエルゴノミクスチェアが最適解なわけ【小寺信良のくらしDX】</a></li></ul>
+    </section>
+
+    <section class="page" id="hacker-news" data-index="11" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>Hacker News（海外）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.4 Q19 8.4 38 8.1 Q98 7.7 121 9.8 Q189 11.9 211 11.8 Q276 11.8 296 11.4 Q355 10.9 372 9.3 Q422 7.6 437 9.5 Q487 11.4 508 10.6 Q562 9.7 574 9.2 T600 8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://pages.ethanmdavidson.com/ai-physics-breakthrough" target="_blank" rel="noopener">Physics Breakthrough Simulator</a></li>
+<li><a href="https://github.com/RiccardoSottini/AffrescoUI" target="_blank" rel="noopener">Why stop at Emacs? Native apps you or an AI reprogram in Clojure while they run</a></li>
+<li><a href="https://koppar.ai/blog/lte-modem-bring-up/" target="_blank" rel="noopener">The AI-designed USB-C LTE Modem is built, and it makes calls</a></li>
+<li><a href="https://github.com/MVS-sysgen/sysgen" target="_blank" rel="noopener">IBM MVS 3.8j Community Edition (52-year old OS)</a></li>
+<li><a href="https://scriptor-pro.github.io/luciole-mono/" target="_blank" rel="noopener">Show HN: Luciole Mono – terminal font designed for legibility</a></li>
+<li><a href="https://malspark.com/blog/malicious-gguf-models-hugging-face/" target="_blank" rel="noopener">GGUF LLM Models with Hidden Malware on Hugging Face Reached 2400 Victims</a></li>
+<li><a href="https://consumerrights.wiki/w/Audible_removes_download_option_for_purchased_audiobooks" target="_blank" rel="noopener">Audible removes download option for purchased audiobooks</a></li>
+<li><a href="https://github.com/p-e-w/heretic/issues/601" target="_blank" rel="noopener">Farewell</a></li>
+<li><a href="https://xinyadu.github.io/blog/claude-code-sabotage.html" target="_blank" rel="noopener">Claude Code sabotage: preliminary benchmarking</a></li>
+<li><a href="https://www.filfre.net/2026/11/diablo-ii/" target="_blank" rel="noopener">Diablo II</a></li></ul>
+    </section>
+
+    <section class="page" id="npb-central" data-index="12" data-sec="10">
+      <p class="script">Today&#x27;s news</p>
+      <h2>プロ野球順位表：セ・リーグ</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.4 Q19 9.4 38 8.9 Q93 8.5 109 8.9 Q163 9.4 184 9.6 Q248 9.9 271 10.9 Q333 11.9 349 10.7 Q396 9.4 413 10.1 Q461 10.7 475 8.7 Q524 6.7 544 7.3 Q587 8.0 592 9.0 T600 10.0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">1位 阪神（79勝62敗2分, 勝率.560）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">2位 巨人（76勝64敗3分, 勝率.543）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">3位 DeNA（71勝69敗3分, 勝率.507）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">4位 広島（61勝78敗4分, 勝率.439）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">5位 ヤクルト（61勝80敗2分, 勝率.433）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">6位 中日（60勝81敗2分, 勝率.426）</a></li></ul>
+    </section>
+
+    <section class="page" id="npb-pacific" data-index="13" data-sec="10">
+      <p class="script">Today&#x27;s news</p>
+      <h2>プロ野球順位表：パ・リーグ</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.2 Q15 10.2 30 10.3 Q76 10.3 93 8.4 Q140 6.5 155 7.2 Q208 7.9 231 7.6 Q293 7.2 309 8.8 Q358 10.4 373 9.6 Q419 8.9 435 7.4 Q489 6.0 511 7.4 Q566 8.8 578 9.4 T600 10.0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">1位 ソフトバンク（91勝49敗3分, 勝率.650）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">2位 西武（79勝60敗4分, 勝率.568）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">3位 日本ハム（78勝62敗3分, 勝率.557）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">4位 オリックス（65勝76敗2分, 勝率.461）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">5位 ロッテ（63勝77敗3分, 勝率.450）</a></li>
+<li><a href="https://baseball.yahoo.co.jp/npb/standings/" target="_blank" rel="noopener">6位 楽天（58勝84敗1分, 勝率.408）</a></li></ul>
+    </section>
+
+    <section class="page" id="j1" data-index="14" data-sec="10">
+      <p class="script">Today&#x27;s news</p>
+      <h2>J1順位表</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.9 Q22 9.9 43 9.5 Q106 9.2 126 7.6 Q184 6.1 203 7.1 Q259 8.1 276 7.4 Q328 6.8 344 8.3 Q395 9.9 415 9.4 Q473 8.9 491 8.3 Q543 7.6 559 8.9 Q594 10.1 596 9.2 T600 8.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul class="long"><li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">1位 FC東京（勝点37・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">2位 柏（勝点34・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">3位 広島（勝点32・17試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">4位 町田（勝点30・15試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">5位 神戸（勝点30・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">6位 川崎F（勝点28・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">7位 横浜FM（勝点26・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">8位 鹿島（勝点25・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">9位 岡山（勝点24・17試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">10位 浦和（勝点23・17試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">11位 京都（勝点22・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">12位 名古屋（勝点18・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">13位 清水（勝点18・17試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">14位 C大阪（勝点18・17試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">15位 千葉（勝点16・17試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">16位 東京V（勝点15・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">17位 水戸（勝点15・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">18位 長崎（勝点14・16試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">19位 G大阪（勝点12・15試合）</a></li>
+<li><a href="https://soccer.yahoo.co.jp/jleague/category/j1/standings" target="_blank" rel="noopener">20位 福岡（勝点8・16試合）</a></li></ul>
+    </section>
+
+    <section class="page" id="mleague" data-index="15" data-sec="10">
+      <p class="script">Today&#x27;s news</p>
+      <h2>Mリーグ順位表</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.3 Q21 9.3 42 10.5 Q102 11.6 120 9.7 Q177 7.8 198 7.3 Q260 6.8 281 6.5 Q343 6.2 364 6.3 Q424 6.3 441 6.9 Q490 7.4 505 9.2 Q551 11.0 567 10.2 T600 9.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://m-league.jp/" target="_blank" rel="noopener">1位 KADOKAWAサクラナイツ（+583.2pt・68試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">2位 セガサミーフェニックス（+296.4pt・66試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">3位 赤坂ドリブンズ（+263.5pt・66試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">4位 TEAM RAIDEN / 雷電（+116.5pt・66試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">5位 KONAMI 麻雀格闘倶楽部（+58.5pt・68試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">6位 EARTH JETS（-60.8pt・68試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">7位 BEAST X（-263.2pt・68試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">8位 U-NEXT Pirates（-270.0pt・68試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">9位 EX風林火山（-307.8pt・66試合）</a></li>
+<li><a href="https://m-league.jp/" target="_blank" rel="noopener">10位 渋谷ABEMAS（-416.3pt・68試合）</a></li></ul>
+    </section>
+
+    <section class="page" id="sports" data-index="16" data-sec="20">
+      <p class="script">Today&#x27;s news</p>
+      <h2>Yahoo!スポーツ</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.6 Q20 9.6 40 9.1 Q100 8.7 119 8.2 Q178 7.7 198 7.9 Q252 8.2 266 8.3 Q318 8.4 340 7.7 Q400 7.1 416 8.0 Q465 8.9 482 10.1 Q533 11.2 551 9.5 Q590 7.8 593 8.5 T600 9.1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://news.yahoo.co.jp/articles/ec462620500fe19358f2559df97dc8597b6f559c?source=rss" target="_blank" rel="noopener">スタート直前にまさかのアクシデント。波乱のスプリントでベッツェッキが今季2勝目／第22戦バレンシアGP(オートスポーツweb)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/c2575b19f7e6b6f09f397ac48d0c39d6fc8d2fd8?source=rss" target="_blank" rel="noopener">日本はウェールズに大敗　英国遠征4連敗でW杯前年を終える／ラグビー(サンケイスポーツ)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/9031d48329e4551820b63884f9d1d040ff937580?source=rss" target="_blank" rel="noopener">【ラグビー日本代表】ウェールズに10―40で敗戦　10月以降5連敗で26年活動終了　W杯へ不安残す(スポニチアネックス)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/6aace9a73a381666a9092ad7da90351b5f122729?source=rss" target="_blank" rel="noopener">【ラグビー】日本代表が最終戦でウェールズに敗戦…今秋テストマッチ５連敗(日刊スポーツ)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/7f1f4518328bd79a5d2f72dd4ec08efdf7e3cd9a?source=rss" target="_blank" rel="noopener">【ラグビー】日本、ウェールズに１０―４０の完敗　Ｗ杯前年の最終戦、泥沼４連敗　欧州の強豪と通算１勝６敗…ネーションズ選手権(スポーツ報知)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/389642976577faf2cecbd5fe99610fa925ecf619?source=rss" target="_blank" rel="noopener">ラグビー日本、ウェールズに敗れる(共同通信)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/dd4e1f8e64721a967dd78139f0e6c0857ed2f809?source=rss" target="_blank" rel="noopener">【大学野球】東都大学野球の国士舘大・長井秀夫監督が今季限りで退任　ＮＴＴ東日本、市川口監督を歴任(スポーツ報知)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/6450f77a572e9293039a8f4c604c9fd7ca2b6587?source=rss" target="_blank" rel="noopener">【順位結果】2026MotoGP第22戦バレンシアGP スプリントレース(オートスポーツweb)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/e05cb6ff4200bb1ff7e2b3e1b33ef40d93d6d316?source=rss" target="_blank" rel="noopener">ヤクルト、来季スローガン「燕心満開」池山監督「この漢字を試合中から流せば…」(サンケイスポーツ)</a></li>
+<li><a href="https://news.yahoo.co.jp/articles/82bf1c30996b85f0063e1382829cda35106423de?source=rss" target="_blank" rel="noopener">【バレー】富士通がアウェイで6勝目を挙げ、2位に浮上。千葉ドットがホームでフルセットを制し、4勝目　SVG男子(バレーボールマガジン)</a></li></ul>
+    </section>
+
+    <section class="page" id="igda" data-index="17" data-sec="20">
+      <p class="script">Games</p>
+      <h2>IGDA日本</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.9 Q18 9.9 36 8.3 Q90 6.6 108 6.8 Q164 7.0 182 7.8 Q234 8.6 249 9.0 Q292 9.4 306 9.3 Q354 9.3 373 9.0 Q432 8.8 452 10.1 Q509 11.4 526 10.8 Q569 10.2 579 9.4 T600 8.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://igda.jp/2026/11/24/17317/" target="_blank" rel="noopener">SIG-Indiedev(仮)第二回イベント『インディーゲーム開発者における「デバンキング問題」の実態と対策』録画・議事録非公開のオンラインセッションと情報ご提供のお願い</a></li>
+<li><a href="https://igda.jp/2026/11/17/17313/" target="_blank" rel="noopener">人工知能のための哲学塾 第五期 第参夜(12/17)</a></li>
+<li><a href="https://igda.jp/2026/11/11/17269/" target="_blank" rel="noopener">GDC27スカラシップ2,000人の募集はじまる</a></li>
+<li><a href="https://igda.jp/2026/11/07/17273/" target="_blank" rel="noopener">Global Game Growth Gateway　「PAX Aus」報告会開催のお知らせ（対面／無料）（11/16）</a></li>
+<li><a href="https://igda.jp/2026/11/06/17267/" target="_blank" rel="noopener">Global Game Jam 2027の会場募集はじまる</a></li>
+<li><a href="https://igda.jp/2026/10/31/17251/" target="_blank" rel="noopener">サイエンティフィックゲームジャム東京2026(11/20-22)</a></li>
+<li><a href="https://igda.jp/2026/10/31/17176/" target="_blank" rel="noopener">（26/11/23）【重要】IGDA日本 メールマガジン配信再開のご案内（第三報）　　　　　　　　　　　　　　　　　　　　（26/10/31）【重要】IGDA日本 メールマガジン配信停止に伴うご案内と今後の対応について（第二報）　　　　　　　　　　　　　　　　　　　　（26/10/12）【重要】メールアドレス流出に関するお詫びとご報告（第一報）　　　　　　　　　　　　　　　　　　　　（26/10/06）メルマガの機能を停止しています。</a></li>
+<li><a href="https://igda.jp/2026/10/25/17242/" target="_blank" rel="noopener">CREATIVE CLUSTER＠TOKYO 〜クリエイターのプレゼン・LT交流会〜(11/8)</a></li>
+<li><a href="https://igda.jp/2026/10/22/17226/" target="_blank" rel="noopener">人工知能のための哲学塾 第五期 第弐夜(11/12)</a></li>
+<li><a href="https://igda.jp/2026/10/07/17188/" target="_blank" rel="noopener">SIG-地方創生オンラインセミナー(11/13)</a></li></ul>
+    </section>
+
+    <section class="page" id="gamebiz" data-index="18" data-sec="20">
+      <p class="script">Games</p>
+      <h2>gamebiz（業界）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.3 Q17 8.3 34 8.4 Q87 8.4 107 7.6 Q169 6.8 192 6.9 Q256 6.9 275 6.4 Q335 5.8 357 7.1 Q417 8.4 434 8.6 Q482 8.9 497 8.2 Q546 7.5 564 8.3 T600 9.0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://gamebiz.jp/news/436045" target="_blank" rel="noopener">『エーペックスレジェンズ』がゴジラコラボ開始以降、16日間首位　BFセールで新作は少なめ　Steam(11/21～11/27)売上ランキング振り返り</a></li>
+<li><a href="https://gamebiz.jp/news/436044" target="_blank" rel="noopener">『FGO』が今週もGoogle Playで首位独走、18日連続首位　アプリストア(11/21～11/27)売上ランキング振り返り</a></li>
+<li><a href="https://gamebiz.jp/news/436043" target="_blank" rel="noopener">Gモード、 Acacia最新作『配信少女ノ裏垢迷宮』を27年1月29日に配信決定…ダンジョン・バトルシーンなど最新SSも初公開</a></li>
+<li><a href="https://gamebiz.jp/news/436042" target="_blank" rel="noopener">インディーゲームスタジオNeural Break、現代ソウルが舞台の3Dインタラクティブ・ミステリー『九尾十夜』体験版をSteamでリリース</a></li>
+<li><a href="https://gamebiz.jp/news/435966" target="_blank" rel="noopener">【週刊Cygames】「Shadowverse World Grand Prix 2026」情報、『Shadowverse EVOLVE』コラボパック「グランブルーファンタジー」など（26年11月21日～27日）</a></li>
+<li><a href="https://gamebiz.jp/news/435964" target="_blank" rel="noopener">【週刊ブシロード】27年よりインド全土へ公式TCG大会サポートを拡大、『パルワールド オフィシャルカードゲーム』インタビューなど（26年11月21日～27日）</a></li>
+<li><a href="https://gamebiz.jp/news/435960" target="_blank" rel="noopener">【今日は何の日？】コーエーテクモゲームス、スマホ版『モンスターファーム』を販売開始（2019年11月28日）</a></li>
+<li><a href="https://gamebiz.jp/news/436041" target="_blank" rel="noopener">工画堂スタジオ、嘘から始まる青春ADV『Sugar Lies』のSteam版を12月10日に発売決定</a></li>
+<li><a href="https://gamebiz.jp/news/436040" target="_blank" rel="noopener">さざなみゲームス、3人専用のオンライン協力謎解きADV『協力イマーシブアドベンチャー ギャラリーファントム』Steamストアページ公開</a></li>
+<li><a href="https://gamebiz.jp/news/436039" target="_blank" rel="noopener">Cygames、『グランブルーファンタジー』でイベント「偶像にさよならを」を11月28日17時より開催</a></li></ul>
+    </section>
+
+    <section class="page" id="game-developer" data-index="19" data-sec="20">
+      <p class="script">Games</p>
+      <h2>Game Developer（海外の業界・開発）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.2 Q24 8.2 47 7.4 Q111 6.5 128 7.3 Q175 8.1 189 7.4 Q235 6.7 253 7.1 Q313 7.5 337 7.0 Q401 6.5 419 7.3 Q473 8.0 491 6.9 Q544 5.8 563 7.7 T600 9.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.gamedeveloper.com/design/grand-theft-auto-vi-and-world-of-warcraft-forever-show-that-mundanity-is-having-a-moment" target="_blank" rel="noopener">Opinion: Grand Theft Auto VI and World of Warcraft: Forever show that mundanity is having a moment</a></li>
+<li><a href="https://www.gamedeveloper.com/business/nvidia-reinstates-jensen-huang-as-ceo" target="_blank" rel="noopener">Nvidia reinstates Jensen Huang as CEO weeks after his resignation</a></li>
+<li><a href="https://www.gamedeveloper.com/programming/unreal-engine-6-to-remove-blueprints-and-actor-gameplay-framework-from-the-beginning" target="_blank" rel="noopener">Epic Games no longer plans to include Blueprints or Actor Gameplay Framework in Unreal Engine 6</a></li>
+<li><a href="https://www.gamedeveloper.com/programming/devs-can-now-utilize-high-end-ambient-occlusion-technique-seen-in-eve-frontier" target="_blank" rel="noopener">Devs can now utilize the high-end ambient occlusion technique seen in EVE: Frontier</a></li>
+<li><a href="https://www.gamedeveloper.com/business/grand-theft-auto-vi-is-officially-the-biggest-video-game-launch-ever" target="_blank" rel="noopener">Grand Theft Auto VI is now the biggest video game launch in history</a></li>
+<li><a href="https://www.gamedeveloper.com/business/ubisoft-misses-forecast-and-bets-big-on-ai-development" target="_blank" rel="noopener">Ubisoft misses forecast and bets big on AI development</a></li>
+<li><a href="https://www.gamedeveloper.com/design/is-control-resonant-s-protagonist-a-sad-wet-man-ft-mikael-kasurinen" target="_blank" rel="noopener">Is Control Resonant&#x27;s protagonist a &#x27;sad wet man?&#x27; ft. Mikael Kasurinen</a></li>
+<li><a href="https://www.gamedeveloper.com/business/ubiosft-lays-off-166-in-canada" target="_blank" rel="noopener">Ubisoft lays off 166 in Canada across Montréal and Quebec City</a></li>
+<li><a href="https://www.gamedeveloper.com/marketing/why-greenlighting-dressmaker-wasn-t-an-easy-decision-to-make" target="_blank" rel="noopener">Why greenlighting Dressmaker wasn&#x27;t an easy decision to make</a></li>
+<li><a href="https://www.gamedeveloper.com/design/clair-obscur-expedition-33-s-narrative-lead-wants-to-change-game-funding" target="_blank" rel="noopener">Clair Obscur: Expedition 33&#x27;s narrative lead wants to change game funding</a></li></ul>
+    </section>
+
+    <section class="page" id="kotaku" data-index="20" data-sec="20">
+      <p class="script">Games</p>
+      <h2>Kotaku（海外）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.9 Q21 8.9 42 8.6 Q98 8.2 112 9.4 Q158 10.6 175 10.7 Q232 10.8 254 9.5 Q313 8.2 330 10.0 Q382 11.8 401 9.2 Q460 6.6 478 7.6 Q531 8.7 546 9.3 Q582 9.9 588 9.6 T600 9.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://kotaku.com/fight-the-bleak-friday-blues-with-12-astonishing-indie-games-to-slam-on-your-wishlist-2001001287" target="_blank" rel="noopener">Fight The Bleak Friday Blues With 12 Incredible Indie Games To Slam On Your Wishlist</a></li>
+<li><a href="https://kotaku.com/hollow-knight-silksong-dlc-sea-of-sorrow-releases-free-for-all-players-and-adds-fishing-2001001319" target="_blank" rel="noopener">Hollow Knight: Silksong DLC Sea Of Sorrow Releases Free For All Players And Adds Fishing</a></li>
+<li><a href="https://kotaku.com/11-gifts-to-buy-for-the-gta-6-fan-in-your-life-2001000423" target="_blank" rel="noopener">11 Gifts To Buy For The GTA 6 Fan In Your Life</a></li>
+<li><a href="https://kotaku.com/fans-worry-the-simpsons-hit-run-remake-may-have-been-killed-amid-studio-layoffs-2001001317" target="_blank" rel="noopener">Fans Worry The Simpsons: Hit &amp; Run Remake May Have Been Killed Amid Studio Layoffs</a></li>
+<li><a href="https://kotaku.com/persona-6-atlus-interview-wait-history-of-series-waku-wada-2001000695" target="_blank" rel="noopener">After Persona 6, You (Probably) Won’t Have To Wait A Decade For Persona 7</a></li>
+<li><a href="https://kotaku.com/danganronpa-persona-paranormasight-square-enix-twitch-streaming-2001000693" target="_blank" rel="noopener">Should There Be Restrictions On Game Streaming? The Japanese Producer For Danganronpa Thinks So</a></li>
+<li><a href="https://kotaku.com/12-best-gifts-for-rpg-fans-2001000412" target="_blank" rel="noopener">The 12 Best Gifts For RPG Lovers In 2026</a></li>
+<li><a href="https://kotaku.com/gta-6-is-a-tragedy-because-you-cannot-sit-down-and-eat-spaghetti-2001000633" target="_blank" rel="noopener">GTA 6 Is A Tragedy Because You Cannot Sit Down And Eat Spaghetti</a></li>
+<li><a href="https://kotaku.com/indie-games-pc-steam-wishlist-thanksgiving-2026-thanksgaming-2001000606" target="_blank" rel="noopener">12 Astonishing Indie Games To Buy Or Wishlist This Thanksgiving Day</a></li>
+<li><a href="https://kotaku.com/12-best-video-game-stocking-stuffers-under-30-that-people-actually-want-2001000398" target="_blank" rel="noopener">12 Best Video Game Stocking Stuffers Under $30 That People Actually Want</a></li></ul>
+    </section>
+
+    <section class="page" id="4gamer" data-index="21" data-sec="20">
+      <p class="script">Games</p>
+      <h2>4Gamer（一般）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.8 Q17 9.8 34 9.4 Q82 8.9 97 10.3 Q146 11.7 165 10.7 Q221 9.6 239 10.8 Q291 11.9 307 11.9 Q362 11.9 385 9.9 Q453 7.9 476 7.3 Q535 6.7 550 8.3 Q586 9.9 590 9.5 T600 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.4gamer.net/games/039/G103917/20261127045/" target="_blank" rel="noopener">「陰の実力者になりたくて！Phantom Echoes」，2027年5月14日に発売決定。最新トレイラーや各エディションの情報も公開</a></li>
+<li><a href="https://www.4gamer.net/games/038/G003821/20261128003/" target="_blank" rel="noopener">週刊Steam広場 第181号：放置RPG「Melvor Idle 2」や，ダンジョンクローラー「Dungeonbound」が発売に</a></li>
+<li><a href="https://www.4gamer.net/games/999/G999902/20261128004/" target="_blank" rel="noopener">ゲームキューブ風コントローラ「8BitDo GC Bluetooth Gamepad」の予約受付中。PCやSwitchに対応し，ドリフト防止のスティックと連射機能を備える</a></li>
+<li><a href="https://www.4gamer.net/games/757/G075754/20261117054/" target="_blank" rel="noopener">あの必殺技も，光がつなぐ壮大な物語も！ 「ツリーオブセイヴァー：ネバーランド」のウルトラマンシリーズコラボを先行体験。「感謝祭」の見どころもお届け【PR】</a></li>
+<li><a href="https://www.4gamer.net/games/484/G048495/20261126027/" target="_blank" rel="noopener">海戦に経営，結婚まで盛りだくさんの「紅の砂漠 Enhanced：未知なる旅路」は，本編の冒険をどう広げたのか？［プレイレポ］</a></li>
+<li><a href="https://www.4gamer.net/games/448/G044868/20261127032/" target="_blank" rel="noopener">「ロマンシング サ・ガ3」の大剣技「乱れ雪月花」をカレーにしたらどうなる？　料理人の閃きで作る3色カレー。俺のコラボカフェ：Menu 094</a></li>
+<li><a href="https://www.4gamer.net/games/001/G000183/20261127009/" target="_blank" rel="noopener">タイ代表の無敗4連覇に地元が沸いた。賞金総額約2900万円の「ラグナロク」公式eスポーツ3大世界大会をレポート［Ragnarok Festa 2026］</a></li>
+<li><a href="https://www.4gamer.net/games/579/G057943/20261126031/" target="_blank" rel="noopener">「リネージュ フェスティバル」が韓国KINTEXで開催。3タイトルの2027年ロードマップや新コンテンツが明かされた特別ステージの模様をレポート</a></li>
+<li><a href="https://www.4gamer.net/games/793/G079350/20261127005/" target="_blank" rel="noopener">デッキ構築型ローグライクRPG「カオスゼロナイトメア」にマルチプレイが実装!?　新コンテンツ“連合作戦 - コアブレイク”を遊んできた［プレイレポ］</a></li>
+<li><a href="https://www.4gamer.net/games/001/G000183/20261111028/" target="_blank" rel="noopener">「ラグナロク」全26タイトルがタイ・バンコクに大集結。1万9000人超が来場し新発表も相次いだ「Ragnarok Festa 2026」をレポート【PR】</a></li></ul>
+    </section>
+
+    <section class="page" id="automaton" data-index="22" data-sec="20">
+      <p class="script">Games</p>
+      <h2>AUTOMATON（インディー中心）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.2 Q19 8.2 39 9.3 Q95 10.3 112 9.5 Q163 8.7 179 7.8 Q224 6.8 238 6.5 Q281 6.1 296 7.6 Q342 9.1 357 9.2 Q403 9.4 419 10.6 Q468 11.9 485 10.6 Q534 9.3 550 9.5 Q586 9.7 590 9.2 T600 8.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://automaton-media.com/articles/newsjp/20261128-481500/" target="_blank" rel="noopener">失踪した妻を探すセクシーADV『この世のどこかにいる妻へ』Steam版、初動で「DLsite版の17倍」も売れる。10言語展開で躍進、“背徳フェチ”に国境なし</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481476/" target="_blank" rel="noopener">セクシーSRPG『ブラウンダスト2』、今後PC版では露出描写を「さらに強化する」との方針を発表。ついに“解禁”か</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481468/" target="_blank" rel="noopener">『グランド・セフト・オートVI（GTA6）』開発元、チェーンソーが登場しないのは「やりすぎ」だったからと明かす。二人は刃を振り回すような人じゃない</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481441/" target="_blank" rel="noopener">『マインクラフト』で「地球丸ごと1/1スケールで再現」するマルチサーバーが出現。推定“約2ペタバイト”の巨大忠実マップ、みんなの自宅もある</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481458/" target="_blank" rel="noopener">PvPvEホラーFPS『HUNGER』、「最後のオープンベータ」が同接1万人超の活況。怪物と生存者が生き残りをかけて戦う、“白兵戦多め”残虐脱出型シューター</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/maplestory-20261128-482448/" target="_blank" rel="noopener">MMORPG『メイプルストーリー』大型アプデ「OVERDRIVE」盛りだくさんな詳細お披露目。新職業「レテ」、一撃ダメージ上限「10兆」のほか『ブルーアーカイブ』とのコラボも発表</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481450/" target="_blank" rel="noopener">自然いっぱい惑星・どうぶつ触れ合い探検ゲーム『The Botanist and the Translator』発表。植物学者が“どうぶつ通訳”とともに、惑星の謎を解き明かす</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481434/" target="_blank" rel="noopener">『アークナイツ：エンドフィールド』新オペレーター「ケーちゃん」の次世代“お腹まわり”グラフィックが脚光浴びる。濡れ感・透け感・肉感、マニアック技術力炸裂</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261128-481421/" target="_blank" rel="noopener">『ホロウナイト シルクソング』無料DLC「Sea of Sorrow」12月11日配信へ。新たに海を渡る物語、すぐ出る</a></li>
+<li><a href="https://automaton-media.com/articles/newsjp/20261127-481399/" target="_blank" rel="noopener">『魔法少女ノ魔女裁判』開発元による新作『配信少女ノ裏垢迷宮』来年1月29日発売へ。裏アカダンジョンで本音を暴いて“公開処刑”する、炎上ガールズバンドとSNSの闇</a></li></ul>
+    </section>
+
+    <section class="page" id="80lv" data-index="23" data-sec="20">
+      <p class="script">Games</p>
+      <h2>80.lv（3Dアート）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.0 Q16 10.0 33 9.9 Q80 9.7 95 10.9 Q139 12.1 154 11.5 Q202 10.8 219 9.3 Q275 7.8 296 7.1 Q356 6.4 374 6.7 Q423 7.0 437 7.0 Q484 7.0 504 8.9 Q558 10.9 572 9.7 T600 8.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://80.lv/articles/grab-the-best-black-friday-deals-on-3d-tools-assets-courses/" target="_blank" rel="noopener">Grab the Best Black Friday Deals on 3D Tools, Assets &amp; Courses</a></li>
+<li><a href="https://80.lv/articles/imagine-balatro-and-inscryption-had-a-baby-this-lovecraftian-pool-horror-roguelite-is-out/" target="_blank" rel="noopener">&quot;Imagine Balatro and Inscryption Had a Baby&quot;: This Lovecraftian Pool Horror Roguelite Is Out</a></li>
+<li><a href="https://80.lv/articles/create-expressive-2d-face-animations-in-blender-with-ease/" target="_blank" rel="noopener">Create Expressive 2D Face Animations In Blender With Ease</a></li>
+<li><a href="https://80.lv/articles/check-out-this-awesome-vfx-breakdown-of-a-helicopter-taking-off/" target="_blank" rel="noopener">Check Out This Awesome VFX Breakdown of a Helicopter Taking Off</a></li>
+<li><a href="https://80.lv/articles/beautiful-shimmering-veil-in-blender-inspired-by-foundation-title-sequence/" target="_blank" rel="noopener">Beautiful Shimmering Veil In Blender Inspired By Foundation Title Sequence</a></li>
+<li><a href="https://80.lv/articles/this-blender-tool-lets-you-sculpt-directly-along-curves-on-3d-surfaces/" target="_blank" rel="noopener">This Blender Tool Lets You Sculpt Directly Along Curves On 3D Surfaces</a></li>
+<li><a href="https://80.lv/articles/breakdown-designing-large-scale-soviet-era-architectural-system-for-vr-game/" target="_blank" rel="noopener">Breakdown: Designing Large-Scale Soviet-Era Architectural System for VR Game</a></li>
+<li><a href="https://80.lv/articles/designing-environments-that-tell-a-story-for-007-first-light/" target="_blank" rel="noopener">Designing Environments That Tell a Story for 007 First Light</a></li>
+<li><a href="https://80.lv/articles/ken-kutaragi-says-playstation-was-not-sony-s-revenge-on-nintendo/" target="_blank" rel="noopener">Ken Kutaragi Says PlayStation Was Not Sony&#x27;s Revenge on Nintendo</a></li>
+<li><a href="https://80.lv/articles/cute-girl-in-stylish-outfit-simulated-with-houdini-s-vellum-solver/" target="_blank" rel="noopener">Cute Girl In Stylish Outfit Simulated With Houdini&#x27;s Vellum Solver</a></li></ul>
+    </section>
+
+    <section class="page" id="gamemakers" data-index="24" data-sec="20">
+      <p class="script">Games</p>
+      <h2>GameMakers</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.8 Q16 8.8 32 7.6 Q84 6.3 105 7.3 Q161 8.3 177 9.6 Q227 10.9 245 8.6 Q301 6.3 323 6.5 Q383 6.8 400 6.5 Q457 6.2 480 8.6 Q543 10.9 562 10.3 T600 9.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://gamemakers.jp/article/2026_11_28_152142/" target="_blank" rel="noopener">ツクールシリーズで作ったゲームを大募集！毎年恒例「RPG Maker Festival」が「RPGツクールフェスティバル」へリニューアル。作品応募は12/13（日）まで</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_28_152184/" target="_blank" rel="noopener">AIポーズ補助や物理演算に特化した3Dアニメーションツール「Cascadeur 2026.3」公開。今週のゲーム開発関連ツールまとめ</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_27_152099/" target="_blank" rel="noopener">Maxonが3Dアセット生成AIツール群をリリース。ZBrushやCinema 4Dと連携もできる「Maxon Plus」提供開始</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_27_152081/" target="_blank" rel="noopener">Anthropicの自律型AIエージェント「Claude Duet」、日本でも提供開始。ユーザーの指示を待たず、メールなど外部アプリと連携し自らタスクを実行</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_27_152083/" target="_blank" rel="noopener">無料でも使えるゲームエンジン「NeoAxis Engine」が更新。macOS・iOS・Web向けにもビルド可能になり、Vulkanもサポート</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_26_152038/" target="_blank" rel="noopener">オープンソースのレトロRPG向けゲームエンジン「Eldiron」、v0.96.0がリリース。PNG画像で立体的なシーンを作れる「2Dアイソメトリック」などが実装</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_26_151990/" target="_blank" rel="noopener">12/26（土）開催のインディーゲーム展示会「大阪ゲームダンジョン2」、入場チケット発売。157団体の出展情報も公開</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_26_151935/" target="_blank" rel="noopener">ベイク不要なSSAOの新手法「CORTAO」、MITライセンスのオープンソースで公開。『EVE Online』のFenris Creationsが発表</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_26_151649/" target="_blank" rel="noopener">元Epic GamesのUXディレクターが教える「脳のメカニズム」から導くゲームデザイン。書籍『ゲーマーズ・ブレイン 2.0』、ボーンデジタルが12/14（月）に発売</a></li>
+<li><a href="https://gamemakers.jp/article/2026_11_25_151774/" target="_blank" rel="noopener">3D服飾ツール「Marvelous Designer」年間ライセンスが35％オフ！史上最大級のセール、11/27（金）～12/2（水）14時まで開催</a></li></ul>
+    </section>
+
+    <section class="page" id="gamemakers-events" data-index="25" data-sec="20">
+      <p class="script">Games</p>
+      <h2>GameMakers イベントカレンダー（カンファレンス・展示会）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.4 Q24 9.4 47 10.2 Q114 10.9 133 9.7 Q185 8.4 199 9.2 Q241 10.0 257 9.4 Q306 8.7 325 7.6 Q382 6.6 400 8.3 Q457 10.1 477 9.8 Q533 9.5 550 9.8 Q588 10.1 592 9.9 T600 9.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul class="long"><li><a href="https://www.google.com/calendar/event?eid=NGJsNTgzbThjM2VyYm82bTFsZG5zbzQ1OXQgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">Milan Games Week &amp; Cartoomics 2026【展示会】（2026-11-27）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MHViNmM3ZGM1N28xYjgwbmlvc3Job3R2ZnMgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">関西インディー試遊会inひらかた【展示会】（2026-11-29）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=NWp0Z2ZtZHFsY251aWh1dWo0b2Y3NmppYWQgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">Google Developer Group DevFest Tokyo 2026【カンファレンス】（2026-11-29）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MWt2M2tjcXBjbWlyOHFuM240bW9pcmg5NWggbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">XR Kaigi 2026【カンファレンス】（2026-11-30）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MGhtcW0xa3FzbzJpOWsxcmljNG9mZ3JzNHYgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">SIGGRAPH Asia 2026【カンファレンス】（2026-12-01）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MTdvbmlscm5tbjBiZHI1dHNuY3BmcWJ1NDAgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">INDIE Live Expo 2026.12.1【展示会】（2026-12-01）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=NnM5OXFnbG1vM2wwa3A0dTg1OGRqcXRiazUgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">Kingdom of Gaming 2026【カンファレンス】（2026-12-01）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=N2MydGphYmM3ZzA5amNxa2sxamVpMzhrNHMgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">Game Tools &amp; Middleware Forum 2026（GTMF 2026）大阪会場【カンファレンス】（2026-12-02）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MjdpYnY4N2pjaDRzbTdwN3Qwcmx1Y3RpcGQgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">GodotCon Tokyo 2026【カンファレンス】（2026-12-04）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MmtubWFkYWZuazVtamx2aXQxMGIwbXY4YTAgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">PAX Unplugged【展示会】（2026-12-04）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=NnJxZmc0ZTFzNDc3a2ZpYjBsYjVuODk3bWggbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">G-EIGHT 2026【展示会】（2026-12-04）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MGU5a2txOGUzNHQ2ODBla3RkOTljaWhyMGkgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">Wholesome Snack 2026【展示会】（2026-12-05）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MHJmaXExOWJiODBkNGlzdTVkMzUzdTR2dGQgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【開始】バーチャルマーケット2026 Winter【展示会】（2026-12-05）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=M2NxbnYxaW5objJwMjkxOHUwNjk2dmJiMmEgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener"> 12/5 Open Source Conference 2026 Okinawa【カンファレンス】（2026-12-05）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=M2s2YjgwNm5yOGdlY2NjaWJyMG52OW40MWYgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">CGWORLD 2026 クリエイティブカンファレンス【カンファレンス】（2026-12-06）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=N2k5YTF1aDBsaDJkMXN2dm4zYWtmdDM4aGQgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【終了】技術書典21（オンライン開催）【展示会】（2026-12-06）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=M2NpNjdnajEzMnQyZzVzczRndWkxbmNqZmIgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">Game Tools &amp; Middleware Forum 2026（GTMF 2026）東京会場【カンファレンス】（2026-12-08）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=N2IzcnFkY2tmZmcwOGk4NHZsYjAyaGJhOGYgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【開始】大カプコン展（滋賀会場）【展示会】（2026-12-08）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=NmVzdXFqdTkzMDl0N3BvaGJ0OGN2cWl0bHUgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【締切】『SOLCRAFT2027 〜宮崎ゲーム・エンタメ祭り〜』出展申込【展示会】（2026-12-09）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MnBoM252a3Q5YzUwNHZmOTVkaXJiODQwMmggbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">The Game Awards 2026【展示会】（2026-12-10）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=M2ZrczlzbGFncDl1cXRvYTVva3Y2bDFrbmcgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">alive 2026【カンファレンス】（2026-12-11）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=M2pubGp1MGZyaWp1cm1kaGVzMms3a3ZzZmIgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener"> 12/12 オープンソースカンファレンス2026 Fukuoka【カンファレンス】（2026-12-12）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=NWsxcTAyYmR1dG12cmQ4c3Nlc2JoajFnYWkgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">京都ゲームホリデー【展示会】（2026-12-12）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=NHF1ZDBob3ZkczVhOWc2dHVnZ2x2bmJoYjYgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【締切】『GAME PIT TOKYO 2027』出展申込【展示会】（2026-12-14）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MW4zOTBwaXVoaTVybjAwZm5xbmx1cGJyYjYgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">JAWS-UG Presents - AI Builders Day 2026【カンファレンス】（2026-12-19）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MGxwNG10ZGw5a2Ewcms1OTY0Y2ZzMDFiZGwgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【終了】バーチャルマーケット2026 Winter【展示会】（2026-12-20）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=M3E1ZWY2YnQzcWhmdTM1YmM5c2dhdGJzdnEgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">【終了】KOJIMA PRODUCTIONS 10th ANNIVERSARY EXHIBITION BEYOND THE STRAND：創造と挑戦の航路【展示会】（2026-12-20）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MTFmZzR0azNhYnNqaGxuZ212bHAzMGplMHIgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">INDIE GAME WEB EVENT『MY GAME FES』Vol.4【展示会】（2026-12-25）</a></li>
+<li><a href="https://www.google.com/calendar/event?eid=MDBoZjRtb3E4YjZwNWRvYnIzNDlkbDliN2QgbjdhN25sNGh2Nms2YjhnZGpianZha2o1bTRAZw" target="_blank" rel="noopener">大阪ゲームダンジョン2【展示会】（2026-12-26）</a></li></ul>
+    </section>
+
+    <section class="page" id="steam-sale" data-index="26" data-sec="10">
+      <p class="script">Games</p>
+      <h2>Steamセール</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.8 Q18 8.8 37 10.1 Q88 11.4 102 11.4 Q147 11.3 164 9.6 Q214 8.0 230 8.6 Q284 9.3 304 10.3 Q368 11.4 391 10.5 Q458 9.5 478 9.5 Q532 9.5 546 9.3 Q581 9.1 587 8.7 T600 8.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://store.steampowered.com/app/1091500/" target="_blank" rel="noopener">サイバーパンク2077（-70% ¥2,633）</a></li>
+<li><a href="https://store.steampowered.com/app/3240220/" target="_blank" rel="noopener">グランド・セフト・オートV エンハンスト（-56% ¥2,851）</a></li>
+<li><a href="https://store.steampowered.com/app/2947440/" target="_blank" rel="noopener">SILENT HILL f（-72% ¥2,402）</a></li>
+<li><a href="https://store.steampowered.com/app/5527800/" target="_blank" rel="noopener">No Asteroids（-20% ¥920）</a></li>
+<li><a href="https://store.steampowered.com/app/2138330/" target="_blank" rel="noopener">サイバーパンク2077：仮初めの自由（-40% ¥2,585）</a></li>
+<li><a href="https://store.steampowered.com/app/2909400/" target="_blank" rel="noopener">FINAL FANTASY VII REBIRTH（-85% ¥986）</a></li>
+<li><a href="https://store.steampowered.com/app/1462040/" target="_blank" rel="noopener">FINAL FANTASY VII REMAKE INTERGRADE（-82% ¥986）</a></li>
+<li><a href="https://store.steampowered.com/app/1412913/" target="_blank" rel="noopener">SILENT HILL 2 &amp; SILENT HILL f スタンダードデュアルパック（-65% ¥4,312）</a></li>
+<li><a href="https://store.steampowered.com/app/2052410/" target="_blank" rel="noopener">魔法使いの夜（-50% ¥3,300）</a></li>
+<li><a href="https://store.steampowered.com/app/2483190/" target="_blank" rel="noopener">Forza Horizon 6（-25% ¥7,350）</a></li></ul>
+    </section>
+
+    <section class="page" id="steam-new" data-index="27" data-sec="10">
+      <p class="script">Games</p>
+      <h2>Steam新作</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.1 Q21 10.1 41 9.3 Q98 8.6 113 9.7 Q161 10.8 179 9.4 Q238 7.9 261 8.1 Q326 8.4 344 7.6 Q396 6.7 411 7.9 Q456 9.0 471 7.6 Q526 6.2 549 7.8 Q596 9.5 598 9.2 T600 8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://store.steampowered.com/app/5298300/" target="_blank" rel="noopener">Football Ambition 27（-25% ¥1,575）</a></li>
+<li><a href="https://store.steampowered.com/app/5406780/" target="_blank" rel="noopener">Ludo Wala 3D &amp; Action（¥0）</a></li>
+<li><a href="https://store.steampowered.com/app/5507600/" target="_blank" rel="noopener">NanaType（¥705）</a></li>
+<li><a href="https://store.steampowered.com/app/5596460/" target="_blank" rel="noopener">The Old Circle: Ecos da Masmorra（-10% ¥634）</a></li>
+<li><a href="https://store.steampowered.com/app/4733430/" target="_blank" rel="noopener">Plucked（-25% ¥787）</a></li>
+<li><a href="https://store.steampowered.com/app/5542300/" target="_blank" rel="noopener">Flying Island Miner（-10% ¥634）</a></li>
+<li><a href="https://store.steampowered.com/app/5594590/" target="_blank" rel="noopener">Kawaii Kaiju: Beam!（-20% ¥400）</a></li>
+<li><a href="https://store.steampowered.com/app/5356280/" target="_blank" rel="noopener">ScreenCam（-15% ¥2,040）</a></li>
+<li><a href="https://store.steampowered.com/app/5375420/" target="_blank" rel="noopener">転生投資王（-10% ¥1,125）</a></li>
+<li><a href="https://store.steampowered.com/app/5428780/" target="_blank" rel="noopener">Dusty Relics（-10% ¥738）</a></li></ul>
+    </section>
+
+    <section class="page" id="hachima" data-index="28" data-sec="20">
+      <p class="script">Games</p>
+      <h2>はちま起稿</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.2 Q16 9.2 33 9.4 Q89 9.7 111 10.3 Q175 10.9 192 9.0 Q245 7.2 263 7.0 Q319 6.9 340 8.8 Q401 10.8 420 8.3 Q474 5.8 490 6.2 Q538 6.6 555 7.4 Q593 8.2 595 8.6 T600 9.0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="http://blog.esuteru.com/archives/10590059.html" target="_blank" rel="noopener">女子「彼氏がこのAI動画で興奮してたらマジで泣く。原初的な”これに興奮するオスはダメだ”がある」</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590200.html" target="_blank" rel="noopener">【悲報】高校野球強豪のPL学園、ガチで潰れそう　全校で28年度生徒募集休止</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590213.html" target="_blank" rel="noopener">TVアニメ『ポケットモンスター』史上最長となる約10ヶ月の放送休止へ… 新シーズンは2027年10月放送予定</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590199.html" target="_blank" rel="noopener">加藤純一さん企画の大規模イベント『配信者ハイパーゲーム大会』運営がグダグダすぎてガチの大炎上…「損害賠償レベルじゃないの」</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590197.html" target="_blank" rel="noopener">【文春】高市首相、脱法スキームで企業献金を受け取っていたとの報道！大阪府内の建設会社グループ4社から計3000万円</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590191.html" target="_blank" rel="noopener">【！？】『フォートナイト』と『ドキドキ文芸部』がコラボ → クレイジーすぎると海外で話題にｗｗｗｗ</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590179.html" target="_blank" rel="noopener">未成年の少女が性的暴行を受ける成人向けゲームを開発し販売していた台湾人2人が起訴される…</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590177.html" target="_blank" rel="noopener">外国人「日本旅行へ行ったとき、体がボロボロの高齢者がたくさん働いててショックだった」「見ていて辛くなるだけ、この国はどうなっているのか」</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590140.html" target="_blank" rel="noopener">【動画】日本人ゲーマーの『GTA6』、海外で大バズリｗｗｗｗ「これもう新作メタルギアだろ」「ゴーストリコンやってるよ」</a></li>
+<li><a href="http://blog.esuteru.com/archives/10590166.html" target="_blank" rel="noopener">歌手・LiSAさんと声優・鈴木達央さんが離婚発表！5年前に鈴木達央さんの不倫発覚、3年前に第1子出産</a></li></ul>
+    </section>
+
+    <section class="page" id="jin115" data-index="29" data-sec="20">
+      <p class="script">Games</p>
+      <h2>オレ的ゲーム速報＠刃</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.3 Q20 8.3 41 7.7 Q98 7.1 115 9.4 Q172 11.6 195 8.8 Q261 6.0 279 6.5 Q331 6.9 347 8.0 Q402 9.1 426 8.1 Q493 7.1 513 8.1 Q565 9.0 577 8.7 T600 8.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://jin115.com/archives/52463243.html" target="_blank" rel="noopener">『Amazonブラックフライデー』の先行セールがスタート！プロゲーマー使用率1位の最強デバイスから冬のオススメ家電まで、ガチの厳選商品をピックアップしたぞ！</a></li>
+<li><a href="https://jin115.com/archives/52463342.html" target="_blank" rel="noopener">「玄関前の液体肥料がちょいちょい盗まれるから、中身を液体除草剤に詰め替えてみるわ」 → ヤバイことになるｗｗｗｗｗｗ</a></li>
+<li><a href="https://jin115.com/archives/52463355.html" target="_blank" rel="noopener">ホロライブ・さくらみこさんの『GTA6』配信、ガチでやばいことになる・・・</a></li>
+<li><a href="https://jin115.com/archives/52463344.html" target="_blank" rel="noopener">「結婚もせず、子供も作らず、フリーターか非正規で働いてるやつなんて俺だけだろと思ってたら・・・」→ 日本の闇がSNSで話題に</a></li>
+<li><a href="https://jin115.com/archives/52463345.html" target="_blank" rel="noopener">サッカー・鎌田大地選手、起訴されたか</a></li>
+<li><a href="https://jin115.com/archives/52463343.html" target="_blank" rel="noopener">加藤純一さんによる『配信者ハイパーゲーム大会 FINAL（ハイゲ）』、ガチで酷すぎて批判が殺到・・・「会場冷え切ってる」「帰りたい」「返金してください」</a></li>
+<li><a href="https://jin115.com/archives/52463341.html" target="_blank" rel="noopener">歌手・LiSAさんと声優・鈴木達央さん、離婚を発表 鈴木達央さんは5年前にファンとの不倫報道</a></li>
+<li><a href="https://jin115.com/archives/52463339.html" target="_blank" rel="noopener">「バイトで大量にミスしたからもう辞めよう。オーナーに謝罪LINE送っとこ」 → オーナーからとんでもない返信がくるｗｗｗｗｗ</a></li>
+<li><a href="https://jin115.com/archives/52463310.html" target="_blank" rel="noopener">『空挺ドラゴンズ』22巻まで「50％オフ」クーポンセール！最新23巻発売！全23巻「18,524円」→「9,658円」！龍を狩って食べる異色のファンタジーグルメ漫画！</a></li>
+<li><a href="https://jin115.com/archives/52463336.html" target="_blank" rel="noopener">可愛い新人声優さん「今日のコーデはこちら！スカート履きました！」ﾊﾟｼｬｯ → スカートがずり落ちて〇〇が丸見えになってしまうｗｗｗｗｗｗ</a></li></ul>
+    </section>
+
+    <section class="page" id="movie-new" data-index="30" data-sec="20">
+      <p class="script">Films &amp; videos</p>
+      <h2>映画：今週公開</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.0 Q15 8.0 31 10.0 Q79 12.1 97 11.3 Q147 10.5 162 11.2 Q210 11.9 229 11.7 Q289 11.5 312 8.9 Q379 6.4 400 8.4 Q461 10.4 480 10.9 Q533 11.4 550 10.7 Q587 10.0 592 9.6 T600 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://eiga.com/movie/107446/" target="_blank" rel="noopener">キアラ・フェラーニ　前を向いて（11月23日(月)）</a></li>
+<li><a href="https://eiga.com/movie/107335/" target="_blank" rel="noopener">ロブ・ロウ　アウトサイダー（11月24日(火)）</a></li>
+<li><a href="https://eiga.com/movie/107359/" target="_blank" rel="noopener">ワン・ラスト・オーダー（11月24日(火)）</a></li>
+<li><a href="https://eiga.com/movie/106794/" target="_blank" rel="noopener">ザ・ファーザー・ミスアドベンチャー・オブ・クリフ・ブース（11月25日(水)）</a></li>
+<li><a href="https://eiga.com/movie/105604/" target="_blank" rel="noopener">ウォリアー・キッド（11月25日(水)）</a></li>
+<li><a href="https://eiga.com/movie/106801/" target="_blank" rel="noopener">モスキートボウル（11月25日(水)）</a></li>
+<li><a href="https://eiga.com/movie/105938/" target="_blank" rel="noopener">このごにおよんで愛など（11月27日(金)）</a></li>
+<li><a href="https://eiga.com/movie/106579/" target="_blank" rel="noopener">君の話（11月27日(金)）</a></li>
+<li><a href="https://eiga.com/movie/106383/" target="_blank" rel="noopener">ワンダンス（11月27日(金)）</a></li>
+<li><a href="https://eiga.com/movie/106069/" target="_blank" rel="noopener">プラクティカル・マジック　魔女たちの秘密（11月27日(金)）</a></li></ul>
+    </section>
+
+    <section class="page" id="movie-ranking" data-index="31" data-sec="10">
+      <p class="script">Films &amp; videos</p>
+      <h2>映画：アクセスランキング</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.1 Q17 10.1 34 8.7 Q91 7.2 114 6.9 Q179 6.6 200 8.6 Q262 10.5 282 9.2 Q343 7.9 364 9.8 Q423 11.7 442 11.7 Q500 11.7 520 9.9 Q571 8.1 580 8.9 T600 9.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://eiga.com/movie/102826/" target="_blank" rel="noopener">1位 ゴジラ－0.0（評価3.8）</a></li>
+<li><a href="https://eiga.com/movie/102527/" target="_blank" rel="noopener">2位 ちっぽけな僕の、おおきな世界（評価4.0）</a></li>
+<li><a href="https://eiga.com/movie/106556/" target="_blank" rel="noopener">3位 クリスマス・キャロル 3人のゴーストたち（評価3.6）</a></li>
+<li><a href="https://eiga.com/movie/106294/" target="_blank" rel="noopener">4位 負けへんで（評価4.0）</a></li>
+<li><a href="https://eiga.com/movie/104217/" target="_blank" rel="noopener">5位 汝、星のごとく（評価4.0）</a></li>
+<li><a href="https://eiga.com/movie/96352/" target="_blank" rel="noopener">6位 魔法使いの夜（評価3.4）</a></li>
+<li><a href="https://eiga.com/movie/106044/" target="_blank" rel="noopener">7位 ママがもうこの世界にいなくても　私の命の日記（評価3.7）</a></li>
+<li><a href="https://eiga.com/movie/104828/" target="_blank" rel="noopener">8位 すべて真夜中の恋人たち（評価3.6）</a></li>
+<li><a href="https://eiga.com/movie/104264/" target="_blank" rel="noopener">9位 栄光のバックホーム（評価3.6）</a></li>
+<li><a href="https://eiga.com/movie/106119/" target="_blank" rel="noopener">10位 ヴェリティ　真実（評価3.4）</a></li></ul>
+    </section>
+
+    <section class="page" id="amazon-prime-video" data-index="32" data-sec="10">
+      <p class="script">Films &amp; videos</p>
+      <h2>配信ランキング：Amazon Prime Video</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.1 Q15 8.1 30 10.0 Q75 11.8 90 9.5 Q140 7.3 161 7.9 Q219 8.6 235 10.2 Q280 11.8 294 11.2 Q338 10.7 354 11.2 Q407 11.7 427 8.8 Q489 5.8 511 8.1 Q567 10.4 578 9.7 T600 9.0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://eiga.com/movie/61613/" target="_blank" rel="noopener">1位 征服されざる西部</a></li>
+<li><a href="https://eiga.com/movie/106123/" target="_blank" rel="noopener">2位 バイオハザード</a></li>
+<li><a href="https://eiga.com/movie/95370/" target="_blank" rel="noopener">3位 SING シング　ネクストステージ</a></li>
+<li><a href="https://eiga.com/movie/70880/" target="_blank" rel="noopener">4位 娘・妻・母</a></li>
+<li><a href="https://eiga.com/movie/55188/" target="_blank" rel="noopener">5位 プレデターズ</a></li>
+<li><a href="https://eiga.com/movie/106416/" target="_blank" rel="noopener">6位 ヤマトよ永遠に REBEL3199 第七章　虹色の輪廻</a></li>
+<li><a href="https://eiga.com/movie/98309/" target="_blank" rel="noopener">7位 ゴジラ－1.0</a></li>
+<li><a href="https://eiga.com/movie/34601/" target="_blank" rel="noopener">8位 またまたあぶない刑事</a></li>
+<li><a href="https://eiga.com/movie/101368/" target="_blank" rel="noopener">9位 盤上の向日葵</a></li>
+<li><a href="https://eiga.com/movie/1094/" target="_blank" rel="noopener">10位 アイランド（2005）</a></li></ul>
+    </section>
+
+    <section class="page" id="netflix" data-index="33" data-sec="10">
+      <p class="script">Films &amp; videos</p>
+      <h2>配信ランキング：Netflix</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 7.9 Q21 7.9 42 7.7 Q99 7.5 115 8.9 Q164 10.3 181 9.7 Q238 9.1 261 8.4 Q323 7.7 339 7.4 Q389 7.2 407 8.0 Q457 8.7 471 10.4 Q514 12.1 529 11.1 Q569 10.1 579 9.9 T600 9.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://eiga.com/movie/54331/" target="_blank" rel="noopener">1位 南極料理人</a></li>
+<li><a href="https://eiga.com/movie/1254/" target="_blank" rel="noopener">2位 アメリ</a></li>
+<li><a href="https://eiga.com/movie/89401/" target="_blank" rel="noopener">3位 ザ・ファブル</a></li>
+<li><a href="https://eiga.com/movie/81516/" target="_blank" rel="noopener">4位 劇場版　遊☆戯☆王 THE DARK SIDE OF DIMENSIONS</a></li>
+<li><a href="https://eiga.com/movie/83287/" target="_blank" rel="noopener">5位 映画　聲の形</a></li>
+<li><a href="https://eiga.com/movie/92746/" target="_blank" rel="noopener">6位 東京リベンジャーズ</a></li>
+<li><a href="https://eiga.com/movie/78321/" target="_blank" rel="noopener">7位 インターステラー</a></li>
+<li><a href="https://eiga.com/movie/92113/" target="_blank" rel="noopener">8位 ミッドナイトスワン</a></li>
+<li><a href="https://eiga.com/movie/47169/" target="_blank" rel="noopener">9位 トゥルーマン・ショー</a></li>
+<li><a href="https://eiga.com/movie/91088/" target="_blank" rel="noopener">10位 あのこは貴族</a></li></ul>
+    </section>
+
+    <section class="page" id="u-next" data-index="34" data-sec="10">
+      <p class="script">Films &amp; videos</p>
+      <h2>配信ランキング：U-NEXT</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.4 Q19 8.4 38 9.7 Q94 11.0 113 8.6 Q166 6.2 181 6.5 Q229 6.8 244 8.8 Q296 10.8 317 8.8 Q380 6.8 402 6.6 Q465 6.3 485 7.4 Q543 8.5 561 9.2 Q598 9.8 598 9.7 T600 9.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://eiga.com/movie/95370/" target="_blank" rel="noopener">1位 SING シング　ネクストステージ</a></li>
+<li><a href="https://eiga.com/movie/70880/" target="_blank" rel="noopener">2位 娘・妻・母</a></li>
+<li><a href="https://eiga.com/movie/98309/" target="_blank" rel="noopener">3位 ゴジラ－1.0</a></li>
+<li><a href="https://eiga.com/movie/34601/" target="_blank" rel="noopener">4位 またまたあぶない刑事</a></li>
+<li><a href="https://eiga.com/movie/101368/" target="_blank" rel="noopener">5位 盤上の向日葵</a></li>
+<li><a href="https://eiga.com/movie/1094/" target="_blank" rel="noopener">6位 アイランド（2005）</a></li>
+<li><a href="https://eiga.com/movie/102896/" target="_blank" rel="noopener">7位 「桐島です」</a></li>
+<li><a href="https://eiga.com/movie/103774/" target="_blank" rel="noopener">8位 愚か者の身分</a></li>
+<li><a href="https://eiga.com/movie/84394/" target="_blank" rel="noopener">9位 SING シング</a></li>
+<li><a href="https://eiga.com/movie/35773/" target="_blank" rel="noopener">10位 飢餓海峡</a></li></ul>
+    </section>
+
+    <section class="page" id="youtube" data-index="35" data-sec="20">
+      <p class="script">Films &amp; videos</p>
+      <h2>YouTube急上昇：通常動画</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.1 Q19 8.1 37 8.6 Q94 9.1 114 10.1 Q172 11.0 190 10.8 Q250 10.5 273 8.1 Q336 5.8 354 7.0 Q410 8.2 431 7.5 Q485 6.8 500 7.3 Q547 7.7 564 8.5 T600 9.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.youtube.com/watch?v=CCswyXGo4B0" target="_blank" rel="noopener">【DAY1】配信者ハイパーゲーム大会FINAL（5,178,070回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=1THMm8vHYPM" target="_blank" rel="noopener">timelesz ｢本当のことを言うと｣ (YouTube ver.)（2,441,530回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=Wme2UD8Q1Eo" target="_blank" rel="noopener">【GTA6】善良な市民 ヒカキンのグラセフ6実況生配信 【Day3】〜手配度６目指すぞ〜（1,564,860回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=Wc1XvAvyl0U" target="_blank" rel="noopener">One Day feat. VIGORMAN / 舐達麻 (Beat by Uyama Hiroto)（1,026,338回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=jtwW6KH4w-Q" target="_blank" rel="noopener">「ストリートファイターリーグ JAPAN 2026」Division F 第8節　☆☆18時40分より初心者必見！SFリーグ: ウォームアップ☆☆（1,001,850回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=l26gpROmqc4" target="_blank" rel="noopener">【マインクラフト】列を見極めて上手にお買い物しましょう【日常組】（764,355回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=h1UaM_d-a6E" target="_blank" rel="noopener">Aぇ! group - 「JACKPOT」from 「LIVE TOUR 2026 Runway」（481,481回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=y7t0iCyFiHo" target="_blank" rel="noopener">たった１人で手作業から始めるピラミッド建設（474,895回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=f7zX9Xd2CNI" target="_blank" rel="noopener">Closer（389,825回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=R_zS-kDsong" target="_blank" rel="noopener">【#ホロじゃん】ホロライブの野郎が新作アプリを出したらしいので調査！ぺこ！【ホロライブ/兎田ぺこら】（382,809回）</a></li></ul>
+    </section>
+
+    <section class="page" id="youtube-shorts" data-index="36" data-sec="20">
+      <p class="script">Films &amp; videos</p>
+      <h2>YouTube急上昇：ショート（推定）</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.1 Q17 10.1 34 8.7 Q85 7.4 103 9.2 Q160 11.1 181 8.6 Q247 6.1 269 6.2 Q335 6.3 356 8.2 Q422 10.1 446 8.4 Q516 6.7 538 7.2 Q588 7.7 592 8.3 T600 8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.youtube.com/watch?v=hDz5oUodoTY" target="_blank" rel="noopener">DECO*27 - ジェスチャ feat. 初音ミク（645,600回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=TC_BqJdg03E" target="_blank" rel="noopener">『劇場版 陰の実力者になりたくて！ 残響編』予告映像｜2027.05 ROADSHOW（352,451回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=GMHCxS63RQA" target="_blank" rel="noopener">ASH ISLAND - &#x27;GOOD MOURNING (Feat. BE&#x27;O)&#x27; M/V（267,625回）</a></li>
+<li><a href="https://www.youtube.com/watch?v=F6IWPEtw9_w" target="_blank" rel="noopener">『ダーウィンズゲーム』予告【2027年3月12日（金）全国公開】（243,570回）</a></li></ul>
+    </section>
+
+    <section class="page" id="event-tokyo" data-index="37" data-sec="20">
+      <p class="script">Out &amp; about</p>
+      <h2>東京都</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 7.8 Q15 7.8 31 7.3 Q80 6.9 98 8.6 Q155 10.3 176 10.3 Q235 10.4 251 10.9 Q303 11.4 321 11.3 Q375 11.1 394 9.3 Q446 7.5 463 6.8 Q511 6.1 526 8.8 Q568 11.5 578 10.6 T600 9.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.walkerplus.com/event/ar0313e564201/" target="_blank" rel="noopener">ルーヴル美術館展 ルネサンス（2026年9月9日(水)～12月13日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e573635/" target="_blank" rel="noopener">東京都美術館開館 100周年記念 オルセー美術館所蔵 いまを生きる歓び（2026年11月14日(土)～2027年3月28日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e609485/" target="_blank" rel="noopener">永遠なるガウディ 〜VR(ブイアール)で辿る、サグラダ・ファミリアの奇跡〜（2026年8月5日(水)～12月31日(木)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e614797/" target="_blank" rel="noopener">雨穴の変な世界展。（2026年10月23日(金)～2027年1月17日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e609059/" target="_blank" rel="noopener">伝説のポケモンと出会う レジェンドリサーチ in日本橋＆八重洲（2026年9月9日(水)～11月29日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e594746/" target="_blank" rel="noopener">マリメッコ展　模様のちから Marimekko: Art of Printmaking -Beauty, Dream, Love(マリメッコ：アート オブ プリントメイキング ― ビューティー、ドリーム、ラブ)(東京)（2026年10月3日(土)～12月20日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e600623/" target="_blank" rel="noopener">Sanrio characters Exhibition Hotel Floria Tokyo (サンリオ キャラクターズ エキシビジョン ホテルフローリア トーキョー)（2026年7月15日(水)～2027年5月31日(月)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e612777/" target="_blank" rel="noopener">第10回羽田航空博物館展in HICity（2026年9月5日(土)～11月29日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e620176/" target="_blank" rel="noopener">北の丸大妖怪展 百鬼騒乱 ～災いと妖怪伝承～（2026年10月16日(金)～12月6日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0313e520355/" target="_blank" rel="noopener">東京ドームホテル 北海道フェア2026（2026年10月1日(木)～2027年2月28日(日)）</a></li></ul>
+    </section>
+
+    <section class="page" id="event-osaka" data-index="38" data-sec="20">
+      <p class="script">Out &amp; about</p>
+      <h2>大阪府</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.6 Q18 8.6 35 7.8 Q95 7.0 118 8.3 Q187 9.6 208 8.2 Q267 6.9 282 6.3 Q336 5.8 358 7.8 Q420 9.8 438 9.6 Q497 9.3 520 9.6 Q574 9.8 583 9.4 T600 8.9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://www.walkerplus.com/event/ar0727e612701/" target="_blank" rel="noopener">ENLIGHTENMENT JAPAN(エンライトメント ジャパン)（2026年10月10日(土)～11月29日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e561315/" target="_blank" rel="noopener">本ズワイ蟹・マルズワイガニ食べ比べ＆ローストビーフ食べ放題（2026年10月1日(木)～2027年3月31日(水)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e608142/" target="_blank" rel="noopener">細田守の原点/展(大阪)（2026年10月28日(水)～2027年1月4日(月)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e614233/" target="_blank" rel="noopener">リアル脱出ゲーム×名探偵コナン「疾風の追走(ハイウェイ)からの脱出」(大阪)（2026年10月24日(土)～12月13日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e20240/" target="_blank" rel="noopener">中之島ウエスト・冬ものがたり2026（2026年11月3日(祝)～12月25日(金)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e604942/" target="_blank" rel="noopener">ハルカス300×名探偵コナン 衝空の晴天台(ハルカス)（2026年7月24日(金)～11月29日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e610718/" target="_blank" rel="noopener">『エヴァンゲリオン』30周年記念展「ALL OF EVANGELION」(大阪)（2026年10月18日(日)～2027年1月11日(祝)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e413727/" target="_blank" rel="noopener">なまら楽しい！北海道フェア（2026年9月1日(火)～11月30日(月)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e601801/" target="_blank" rel="noopener">北斎・広重づくし（2026年7月28日(火)～2027年1月24日(日)）</a></li>
+<li><a href="https://www.walkerplus.com/event/ar0727e620734/" target="_blank" rel="noopener">ガチャガチャ展 in 大阪（2026年12月3日(木)～2027年1月12日(火)）</a></li></ul>
+    </section>
+
+    <section class="page" id="spice-music" data-index="39" data-sec="20">
+      <p class="script">Out &amp; about</p>
+      <h2>SPICE 音楽</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.5 Q17 9.5 35 10.8 Q90 12.1 111 11.8 Q168 11.6 183 9.9 Q231 8.1 249 9.0 Q306 9.9 329 9.2 Q388 8.5 402 8.5 Q454 8.4 477 9.1 Q543 9.8 562 9.5 T600 9.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="http://spice.eplus.jp/articles/350785" target="_blank" rel="noopener">YOASOBI “『はじめての』文芸部”発の新曲MVを公開 『センパイを殺したいので女装する』を実写&amp;アニメーションで表現</a></li>
+<li><a href="http://spice.eplus.jp/articles/350784" target="_blank" rel="noopener">香港で3冠、世界各国でチャート1位獲得の高瀬統也、ビルボードライブ横浜に初登場決定</a></li>
+<li><a href="http://spice.eplus.jp/articles/350783" target="_blank" rel="noopener">さとう。3rd アルバムリリース＆自身最大規模となるホールワンマン開催決定、新アーティスト写真も公開</a></li>
+<li><a href="http://spice.eplus.jp/articles/350782" target="_blank" rel="noopener">猫背のネイビーセゾン、第2の出発点・shibuya eggmanを皮切りに2027年初の全国ワンマンツアー開催決定</a></li>
+<li><a href="http://spice.eplus.jp/articles/350778" target="_blank" rel="noopener">BUCK∞TICK、樋口豊60回目の誕生日を祝福する記念ライブを地元群馬・高崎芸術劇場にて開催決定</a></li>
+<li><a href="http://spice.eplus.jp/articles/350781" target="_blank" rel="noopener">カメレオン・ライム・ウーピーパイ、The Steensとの新曲「Put Your Hands Up」をリリース【コメントあり】</a></li>
+<li><a href="http://spice.eplus.jp/articles/350616" target="_blank" rel="noopener">Galileo Galilei　闇さえ共有し互いに育ててきたファンとの関係性――長い第一章の完結、ツアー『Rise of The Man』ファイナルをレポート</a></li>
+<li><a href="http://spice.eplus.jp/articles/350780" target="_blank" rel="noopener">LIL LEAGUE・岩城星那＆中村竜大、桑田佳祐の冬の名曲をピアノ弾き語りでカバー</a></li>
+<li><a href="http://spice.eplus.jp/articles/350779" target="_blank" rel="noopener">西川貴教と小室哲哉が再びタッグ　『機動戦士ガンダムSEED FREEDOM ZERO』の主題歌をリリース【コメントあり】</a></li>
+<li><a href="http://spice.eplus.jp/articles/350733" target="_blank" rel="noopener">広島クラブクアトロ25周年企画『QUATTRO CROSSING』第3弾発表</a></li></ul>
+    </section>
+
+    <section class="page" id="spice-event" data-index="40" data-sec="20">
+      <p class="script">Out &amp; about</p>
+      <h2>SPICE イベント</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9.9 Q14 9.9 28 10.5 Q77 11.2 98 9.6 Q156 7.9 173 9.9 Q226 11.9 246 11.8 Q305 11.7 323 9.2 Q379 6.7 400 7.7 Q462 8.8 482 8.8 Q542 8.8 561 9.4 T600 9.9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="http://spice.eplus.jp/articles/350759" target="_blank" rel="noopener">京都太秦の時代劇と「斬られ役」の魅力を堪能できる、特別上映企画『太秦時代劇復活祭』が開催　 安田淳一監督、大野裕之監督が登壇</a></li>
+<li><a href="http://spice.eplus.jp/articles/350672" target="_blank" rel="noopener">乃木坂46・伊藤理々杏とお笑い芸人なだぎ武が親子役で出演決定！2026年最大規模のリアル脱出ゲーム『終わらないクリスマスからの脱出』</a></li>
+<li><a href="http://spice.eplus.jp/articles/350410" target="_blank" rel="noopener">＜埼玉・大阪・奈良＞12月に行きたい注目のイベント3選【eplus weekend club】</a></li>
+<li><a href="http://spice.eplus.jp/articles/350754" target="_blank" rel="noopener">乃木坂46・賀喜遥香の初個展『Heartrium』東京・渋谷PARCOでの開催が決定（コメントあり）</a></li>
+<li><a href="http://spice.eplus.jp/articles/350693" target="_blank" rel="noopener">埼玉・所沢市の音楽イベント『武蔵野 MUSIC JAM 2027』　浮trio、梅津和時、KMC ＆ STUTS、曽我部恵一の出演が決定</a></li>
+<li><a href="http://spice.eplus.jp/articles/350681" target="_blank" rel="noopener">アニメ「〈物語〉シリーズ」×「秘密結社holoX」体験型展示『×物語 -バツモノガタリ-』渋谷で開催、ウエダハジメ＆久坂んむり描き下ろしイラストも公開</a></li>
+<li><a href="http://spice.eplus.jp/articles/350638" target="_blank" rel="noopener">オリックス・バファローズの人気選手が登壇　『ホテルニューオータニ（東京）主催 オリックス・バファローズ プレミアムトークショー』が開催</a></li>
+<li><a href="http://spice.eplus.jp/articles/350309" target="_blank" rel="noopener">文フリを説明する。鈴木ジェロニモと行く『文学フリマ東京43』体験レポート</a></li>
+<li><a href="http://spice.eplus.jp/articles/350631" target="_blank" rel="noopener">愛知・名古屋会場『ヘタリア20周年原画展 WorldFesta』の詳細＆チケット情報を一挙解禁</a></li>
+<li><a href="http://spice.eplus.jp/articles/350560" target="_blank" rel="noopener">宇多田ヒカル、緑黄色社会、QUEENなど全14組のアーティストが参加！　音楽と出逢える雑貨店『MASHROOM Our Goodies』潜入レポ</a></li></ul>
+    </section>
+
+    <section class="page" id="spice-sports" data-index="41" data-sec="20">
+      <p class="script">Out &amp; about</p>
+      <h2>SPICE スポーツ</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 8.9 Q21 8.9 43 9.1 Q108 9.4 130 9.1 Q190 8.8 205 9.4 Q249 10.1 264 8.5 Q312 7.0 330 8.1 Q385 9.1 402 9.0 Q460 8.9 483 8.5 Q543 8.1 557 9.1 Q589 10.0 593 9.6 T600 9.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="http://spice.eplus.jp/articles/350352" target="_blank" rel="noopener">プロレスリング・ノア大晦日『NOAH “THE NEW YEAR” EVE 2026』が熱い！　過熱する内藤哲也＆清宮海斗＆Yoshiki InamuraのGHCヘビー級ベルト争い</a></li>
+<li><a href="http://spice.eplus.jp/articles/350660" target="_blank" rel="noopener">【インタビュー】4代目タイガーマスクが師匠・初代タイガーマスク上映イベントへの思いを語る！「根っからの大ファンですから！」チケットのイープラス販売は11月30日まで</a></li>
+<li><a href="http://spice.eplus.jp/articles/350473" target="_blank" rel="noopener">錦織圭ら集結『U-NEXT presents ドリームテニスARIAKE』一部追加席＆見切り席が11/28から発売</a></li>
+<li><a href="http://spice.eplus.jp/articles/350554" target="_blank" rel="noopener">ゴルフ3ツアーJLPGA＆JGTO&amp;PGA対抗戦『Hitachi 3Tours Championship 2026』12/13開催</a></li>
+<li><a href="http://spice.eplus.jp/articles/350638" target="_blank" rel="noopener">オリックス・バファローズの人気選手が登壇　『ホテルニューオータニ（東京）主催 オリックス・バファローズ プレミアムトークショー』が開催</a></li>
+<li><a href="http://spice.eplus.jp/articles/350559" target="_blank" rel="noopener">いよいよ決戦の時迫る！　杉山愛監督ラストマッチ『ビリー･ジーン･キング･カップ by Gainbridge 2026 Play-Offs 日本対アルゼンチン』対戦組み合わせ決定</a></li>
+<li><a href="http://spice.eplus.jp/articles/350510" target="_blank" rel="noopener">羽生結弦が届け続ける“希望の光”『notte stellata 2027』来年3月開催！ 独占最速先行販売が12/1から開始</a></li>
+<li><a href="http://spice.eplus.jp/articles/350477" target="_blank" rel="noopener">巨人マスコット・ヴィーナスからのファン感謝『VENUS PRIDE 2026 final～Welcome to HOTEL VENUS～』は12/23開催～新メンバーも発表</a></li>
+<li><a href="http://spice.eplus.jp/articles/350443" target="_blank" rel="noopener">『ゴルフ日本シリーズJTカップ』12/3開幕！今季を締めくくるメジャー大会を制するのは？</a></li>
+<li><a href="http://spice.eplus.jp/articles/350270" target="_blank" rel="noopener">羽生結弦製作総指揮・出演の『Yuzuru Hanyu “REALIVE” an ICE STORY project』11/28・29に佐賀公演開催</a></li></ul>
+    </section>
+
+    <section class="page" id="tokio-hot-100" data-index="42" data-sec="10">
+      <p class="script">Out &amp; about</p>
+      <h2>J-WAVE TOKIO HOT 100</h2>
+      <svg class="hand-line" viewBox="0 0 600 18" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10.2 Q18 10.2 35 10.7 Q88 11.2 105 8.9 Q160 6.7 180 7.1 Q241 7.6 261 7.3 Q320 6.9 339 8.7 Q391 10.5 406 9.8 Q456 9.1 476 10.0 Q530 10.8 544 10.3 Q579 9.7 586 9.4 T600 9.1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <ul><li><a href="https://open.spotify.com/search/DEPENDS%20XG" target="_blank" rel="noopener">1位 DEPENDS / XG</a></li>
+<li><a href="https://open.spotify.com/search/EASY%2C%20NO%20WAY%21%21%20LUV" target="_blank" rel="noopener">2位 EASY, NO WAY!! / LUV</a></li>
+<li><a href="https://open.spotify.com/search/NOW%20U%20KNOW%20BE%3AFIRST" target="_blank" rel="noopener">3位 NOW U KNOW / BE:FIRST</a></li>
+<li><a href="https://open.spotify.com/search/SLIDIN%20HANA" target="_blank" rel="noopener">4位 SLIDIN / HANA</a></li>
+<li><a href="https://open.spotify.com/search/%E7%B5%90%E3%81%B3%20AYUMU%20IMAZU" target="_blank" rel="noopener">5位 結び / AYUMU IMAZU</a></li>
+<li><a href="https://open.spotify.com/search/TOM%20AND%20JERRY%20JOHN%20MAYER" target="_blank" rel="noopener">6位 TOM AND JERRY / JOHN MAYER</a></li>
+<li><a href="https://open.spotify.com/search/%E3%82%AD%E3%83%84%E3%83%8D%E3%83%8E%E3%83%9C%E3%82%BF%E3%83%B3%20SPITZ" target="_blank" rel="noopener">7位 キツネノボタン / SPITZ</a></li>
+<li><a href="https://open.spotify.com/search/HI-LITER%20SUCHMOS" target="_blank" rel="noopener">8位 HI-LITER / SUCHMOS</a></li>
+<li><a href="https://open.spotify.com/search/NEON%20A2O%20LITE" target="_blank" rel="noopener">9位 NEON / A2O LITE</a></li>
+<li><a href="https://open.spotify.com/search/HONG%20KONG%20THE%20WEEKND%20FEAT.%20%E7%8E%8B%E8%8F%B2%E5%AD%A3%E5%80%99%E9%A2%A8" target="_blank" rel="noopener">10位 HONG KONG / THE WEEKND FEAT. 王菲季候風</a></li></ul>
+    </section>
+</main>
+<button class="side" id="prev" title="前へ（←）"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4.5c10.6-.4 19.4 8.3 19.2 19.3-.2 10.4-8.6 19.4-19.6 19.1C13.4 42.6 4.6 34.2 4.8 23.6 5 13.4 13 4.9 24.6 4.6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M20.5 15.5c3.2 2.9 6.1 5.6 8.6 8.6-2.6 2.9-5.4 5.7-8.4 8.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<button class="side" id="next" title="次へ（→）"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4.5c10.6-.4 19.4 8.3 19.2 19.3-.2 10.4-8.6 19.4-19.6 19.1C13.4 42.6 4.6 34.2 4.8 23.6 5 13.4 13 4.9 24.6 4.6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M20.5 15.5c3.2 2.9 6.1 5.6 8.6 8.6-2.6 2.9-5.4 5.7-8.4 8.7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<footer><b>NEWS</b>2026.11.29 00:16<span id="cat" hidden></span></footer>
+<nav class="toc" id="toc">
+<button class="tbtn close" id="tocClose">close ✕</button>
+<h3><span class="script">Today&#x27;s news</span>一般ニュース</h3><ul>
+<li><a href="#shinkansen" data-go="0" class="empty">東海道新幹線 運行状況</a></li>
+<li><a href="#weather" data-go="1">今日・明日の天気</a></li>
+<li><a href="#nhk" data-go="2">NHKニュース</a></li>
+<li><a href="#yahoo" data-go="3">Yahoo!ニューストピックス</a></li>
+<li><a href="#nikkei" data-go="4">日経新聞（速報）</a></li>
+<li><a href="#cnn-co-jp" data-go="5">CNN.co.jp（海外）</a></li>
+<li><a href="#ai-watch" data-go="6">AI Watch</a></li>
+<li><a href="#itmedia-ai" data-go="7">ITmedia AI+</a></li>
+<li><a href="#gizmodo" data-go="8">ギズモード・ジャパン</a></li>
+<li><a href="#gigazine" data-go="9">GIGAZINE</a></li>
+<li><a href="#hatena-it" data-go="10">はてブ テクノロジー</a></li>
+<li><a href="#hacker-news" data-go="11">Hacker News（海外）</a></li>
+<li><a href="#npb-central" data-go="12">プロ野球順位表：セ・リーグ</a></li>
+<li><a href="#npb-pacific" data-go="13">プロ野球順位表：パ・リーグ</a></li>
+<li><a href="#j1" data-go="14">J1順位表</a></li>
+<li><a href="#mleague" data-go="15">Mリーグ順位表</a></li>
+<li><a href="#sports" data-go="16">Yahoo!スポーツ</a></li>
+</ul>
+<h3><span class="script">Games</span>ゲームニュース</h3><ul>
+<li><a href="#igda" data-go="17">IGDA日本</a></li>
+<li><a href="#gamebiz" data-go="18">gamebiz（業界）</a></li>
+<li><a href="#game-developer" data-go="19">Game Developer（海外の業界・開発）</a></li>
+<li><a href="#kotaku" data-go="20">Kotaku（海外）</a></li>
+<li><a href="#4gamer" data-go="21">4Gamer（一般）</a></li>
+<li><a href="#automaton" data-go="22">AUTOMATON（インディー中心）</a></li>
+<li><a href="#80lv" data-go="23">80.lv（3Dアート）</a></li>
+<li><a href="#gamemakers" data-go="24">GameMakers</a></li>
+<li><a href="#gamemakers-events" data-go="25">GameMakers イベントカレンダー（カンファレンス・展示会）</a></li>
+<li><a href="#steam-sale" data-go="26">Steamセール</a></li>
+<li><a href="#steam-new" data-go="27">Steam新作</a></li>
+<li><a href="#hachima" data-go="28">はちま起稿</a></li>
+<li><a href="#jin115" data-go="29">オレ的ゲーム速報＠刃</a></li>
+</ul>
+<h3><span class="script">Films &amp; videos</span>映画・YouTube</h3><ul>
+<li><a href="#movie-new" data-go="30">映画：今週公開</a></li>
+<li><a href="#movie-ranking" data-go="31">映画：アクセスランキング</a></li>
+<li><a href="#amazon-prime-video" data-go="32">配信ランキング：Amazon Prime Video</a></li>
+<li><a href="#netflix" data-go="33">配信ランキング：Netflix</a></li>
+<li><a href="#u-next" data-go="34">配信ランキング：U-NEXT</a></li>
+<li><a href="#youtube" data-go="35">YouTube急上昇：通常動画</a></li>
+<li><a href="#youtube-shorts" data-go="36">YouTube急上昇：ショート（推定）</a></li>
+</ul>
+<h3><span class="script">Out &amp; about</span>イベント（東京・大阪）</h3><ul>
+<li><a href="#event-tokyo" data-go="37">東京都</a></li>
+<li><a href="#event-osaka" data-go="38">大阪府</a></li>
+<li><a href="#spice-music" data-go="39">SPICE 音楽</a></li>
+<li><a href="#spice-event" data-go="40">SPICE イベント</a></li>
+<li><a href="#spice-sports" data-go="41">SPICE スポーツ</a></li>
+<li><a href="#tokio-hot-100" data-go="42">J-WAVE TOKIO HOT 100</a></li>
+</ul>
+</nav>
+<script type="application/json" id="pageData">[{"slug": "shinkansen", "category": "一般ニュース", "label": "東海道新幹線 運行状況", "sec": 10, "empty": true}, {"slug": "weather", "category": "一般ニュース", "label": "今日・明日の天気", "sec": 10, "empty": false}, {"slug": "nhk", "category": "一般ニュース", "label": "NHKニュース", "sec": 20, "empty": false}, {"slug": "yahoo", "category": "一般ニュース", "label": "Yahoo!ニューストピックス", "sec": 20, "empty": false}, {"slug": "nikkei", "category": "一般ニュース", "label": "日経新聞（速報）", "sec": 20, "empty": false}, {"slug": "cnn-co-jp", "category": "一般ニュース", "label": "CNN.co.jp（海外）", "sec": 20, "empty": false}, {"slug": "ai-watch", "category": "一般ニュース", "label": "AI Watch", "sec": 20, "empty": false}, {"slug": "itmedia-ai", "category": "一般ニュース", "label": "ITmedia AI+", "sec": 20, "empty": false}, {"slug": "gizmodo", "category": "一般ニュース", "label": "ギズモード・ジャパン", "sec": 20, "empty": false}, {"slug": "gigazine", "category": "一般ニュース", "label": "GIGAZINE", "sec": 20, "empty": false}, {"slug": "hatena-it", "category": "一般ニュース", "label": "はてブ テクノロジー", "sec": 20, "empty": false}, {"slug": "hacker-news", "category": "一般ニュース", "label": "Hacker News（海外）", "sec": 20, "empty": false}, {"slug": "npb-central", "category": "一般ニュース", "label": "プロ野球順位表：セ・リーグ", "sec": 10, "empty": false}, {"slug": "npb-pacific", "category": "一般ニュース", "label": "プロ野球順位表：パ・リーグ", "sec": 10, "empty": false}, {"slug": "j1", "category": "一般ニュース", "label": "J1順位表", "sec": 10, "empty": false}, {"slug": "mleague", "category": "一般ニュース", "label": "Mリーグ順位表", "sec": 10, "empty": false}, {"slug": "sports", "category": "一般ニュース", "label": "Yahoo!スポーツ", "sec": 20, "empty": false}, {"slug": "igda", "category": "ゲームニュース", "label": "IGDA日本", "sec": 20, "empty": false}, {"slug": "gamebiz", "category": "ゲームニュース", "label": "gamebiz（業界）", "sec": 20, "empty": false}, {"slug": "game-developer", "category": "ゲームニュース", "label": "Game Developer（海外の業界・開発）", "sec": 20, "empty": false}, {"slug": "kotaku", "category": "ゲームニュース", "label": "Kotaku（海外）", "sec": 20, "empty": false}, {"slug": "4gamer", "category": "ゲームニュース", "label": "4Gamer（一般）", "sec": 20, "empty": false}, {"slug": "automaton", "category": "ゲームニュース", "label": "AUTOMATON（インディー中心）", "sec": 20, "empty": false}, {"slug": "80lv", "category": "ゲームニュース", "label": "80.lv（3Dアート）", "sec": 20, "empty": false}, {"slug": "gamemakers", "category": "ゲームニュース", "label": "GameMakers", "sec": 20, "empty": false}, {"slug": "gamemakers-events", "category": "ゲームニュース", "label": "GameMakers イベントカレンダー（カンファレンス・展示会）", "sec": 20, "empty": false}, {"slug": "steam-sale", "category": "ゲームニュース", "label": "Steamセール", "sec": 10, "empty": false}, {"slug": "steam-new", "category": "ゲームニュース", "label": "Steam新作", "sec": 10, "empty": false}, {"slug": "hachima", "category": "ゲームニュース", "label": "はちま起稿", "sec": 20, "empty": false}, {"slug": "jin115", "category": "ゲームニュース", "label": "オレ的ゲーム速報＠刃", "sec": 20, "empty": false}, {"slug": "movie-new", "category": "映画・YouTube", "label": "映画：今週公開", "sec": 20, "empty": false}, {"slug": "movie-ranking", "category": "映画・YouTube", "label": "映画：アクセスランキング", "sec": 10, "empty": false}, {"slug": "amazon-prime-video", "category": "映画・YouTube", "label": "配信ランキング：Amazon Prime Video", "sec": 10, "empty": false}, {"slug": "netflix", "category": "映画・YouTube", "label": "配信ランキング：Netflix", "sec": 10, "empty": false}, {"slug": "u-next", "category": "映画・YouTube", "label": "配信ランキング：U-NEXT", "sec": 10, "empty": false}, {"slug": "youtube", "category": "映画・YouTube", "label": "YouTube急上昇：通常動画", "sec": 20, "empty": false}, {"slug": "youtube-shorts", "category": "映画・YouTube", "label": "YouTube急上昇：ショート（推定）", "sec": 20, "empty": false}, {"slug": "event-tokyo", "category": "イベント（東京・大阪）", "label": "東京都", "sec": 20, "empty": false}, {"slug": "event-osaka", "category": "イベント（東京・大阪）", "label": "大阪府", "sec": 20, "empty": false}, {"slug": "spice-music", "category": "イベント（東京・大阪）", "label": "SPICE 音楽", "sec": 20, "empty": false}, {"slug": "spice-event", "category": "イベント（東京・大阪）", "label": "SPICE イベント", "sec": 20, "empty": false}, {"slug": "spice-sports", "category": "イベント（東京・大阪）", "label": "SPICE スポーツ", "sec": 20, "empty": false}, {"slug": "tokio-hot-100", "category": "イベント（東京・大阪）", "label": "J-WAVE TOKIO HOT 100", "sec": 10, "empty": false}]</script>
+<script>
+  const pages = JSON.parse(document.getElementById("pageData").textContent);
+  const els = document.querySelectorAll(".page");
+  const main = document.getElementById("main");
+  const toc = document.getElementById("toc");
+  const autoBtn = document.getElementById("auto");
+  const bar = document.getElementById("bar");
+  const RELOAD_MS = 5 * 60 * 1000;   // ページは1時間おきに作り直すので、自動送りのあいだは5分おきに読み直す
+  let cur = 0, autoTimer = null, reloadTimer = null, barTimer = null, shownAt = 0;
+
+  function indexOfSlug(slug) {
+    const i = pages.findIndex(p => p.slug === slug);
+    return i < 0 ? null : i;
+  }
+  function show(i) {
+    const n = pages.length;
+    cur = ((i % n) + n) % n;
+    els.forEach((e, k) => e.classList.toggle("active", k === cur));
+    document.getElementById("cat").textContent = pages[cur].category;
+    document.getElementById("count").textContent = pages[cur].category + "　" + (cur + 1) + " / " + n;
+    document.title = pages[cur].label + " - ニュースポータル";
+    history.replaceState(null, "", "#" + pages[cur].slug);
+    toc.querySelectorAll("a").forEach(a => a.classList.toggle("current", +a.dataset.go === cur));
+    main.scrollTop = 0;
+    if (autoTimer !== null) scheduleAuto();
+  }
+  function step(d) {   // 空のページは飛ばす（全部空なら1つ進むだけ）
+    for (let k = 1; k <= pages.length; k++) {
+      const j = cur + d * k;
+      if (!pages[((j % pages.length) + pages.length) % pages.length].empty) return show(j);
+    }
+    show(cur + d);
+  }
+  function scheduleAuto() {
+    clearTimeout(autoTimer);
+    const ms = pages[cur].sec * 1000;
+    shownAt = Date.now();
+    autoTimer = setTimeout(() => step(1), ms);
+    clearInterval(barTimer);
+    barTimer = setInterval(() => { bar.style.width = Math.min(100, (Date.now() - shownAt) / ms * 100) + "%"; }, 200);
+  }
+  function startAuto() {
+    autoBtn.classList.add("on"); autoBtn.textContent = "❚❚ auto";
+    scheduleAuto();
+    clearInterval(reloadTimer);
+    reloadTimer = setInterval(() => location.reload(), RELOAD_MS);
+    try { sessionStorage.setItem("autoMode", "1"); } catch (e) {}
+  }
+  function stopAuto() {
+    autoBtn.classList.remove("on"); autoBtn.textContent = "▷ auto";
+    clearTimeout(autoTimer); autoTimer = null;
+    clearInterval(reloadTimer); clearInterval(barTimer); bar.style.width = "0";
+    try { sessionStorage.removeItem("autoMode"); } catch (e) {}
+  }
+
+  document.getElementById("prev").addEventListener("click", () => step(-1));
+  document.getElementById("next").addEventListener("click", () => step(1));
+  autoBtn.addEventListener("click", () => autoTimer === null ? startAuto() : stopAuto());
+  document.getElementById("tocBtn").addEventListener("click", () => toc.classList.add("open"));
+  document.getElementById("tocClose").addEventListener("click", () => toc.classList.remove("open"));
+  toc.addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-go]");
+    if (!a) return;
+    e.preventDefault(); toc.classList.remove("open"); show(+a.dataset.go);
+  });
+  // 画面の左右をタップ（リンクの上は除く）
+  main.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    const x = e.clientX / window.innerWidth;
+    if (x < 1 / 3) step(-1); else if (x > 2 / 3) step(1);
+  });
+  // スワイプ
+  let tx = null, ty = null;
+  main.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  main.addEventListener("touchend", (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+    tx = ty = null;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight") step(1);
+    else if (e.key === "ArrowLeft") step(-1);
+    else if (e.key === " ") { e.preventDefault(); autoTimer === null ? startAuto() : stopAuto(); }
+    else if (e.key === "Escape") toc.classList.remove("open");
+  });
+  window.addEventListener("hashchange", () => {
+    const i = indexOfSlug(location.hash.slice(1));
+    if (i !== null && i !== cur) show(i);
+  });
+
+  const first = indexOfSlug(location.hash.slice(1));
+  if (first !== null) show(first); else { cur = -1; step(1); }
+  try { if (sessionStorage.getItem("autoMode") === "1") startAuto(); } catch (e) {}
+</script>
+</body>
+</html>
